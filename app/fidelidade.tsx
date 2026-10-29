@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Text,
   View,
@@ -9,6 +9,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { estiloLogo, logo } from '../lib/imagens';
+import { buscarPerfil } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function FidelidadeScreen() {
@@ -22,6 +23,28 @@ export default function FidelidadeScreen() {
       router.replace('/perfil');
     }
   }
+
+  const [pontos, setPontos] = useState(0);
+
+  // Lê os pontos do banco quando a tela abre
+  useEffect(() => {
+    buscarPerfil().then((perfil) => {
+      if (perfil) {
+        setPontos(perfil.pontos_fidelidade);
+      }
+    });
+  }, []);
+
+  // Próxima recompensa: café com 500 pontos, combo com 1000
+  let mensagem = 'Você já pode trocar seus pontos pelo combo café + croissant!';
+  if (pontos < 500) {
+    mensagem = 'Faltam ' + (500 - pontos) + ' pontos para ganhar um café grátis!';
+  } else if (pontos < 1000) {
+    mensagem = 'Faltam ' + (1000 - pontos) + ' pontos para ganhar o combo café + croissant!';
+  }
+
+  // A cápsula tem 4 partes; cada 250 pontos enche uma (de baixo para cima)
+  const partesCheias = Math.min(4, Math.floor(pontos / 250));
 
   return (
     <View style={styles.container}>
@@ -54,22 +77,20 @@ export default function FidelidadeScreen() {
           <View style={styles.titleUnderline} />
         </View>
 
-        <Text style={styles.pointsValue}>320 / 1000</Text>
+        <Text style={styles.pointsValue}>{pontos} / 1000</Text>
 
         <View style={styles.meterContainer}>
           <View style={styles.capsuleMeter}>
-            <View style={[styles.segment, styles.segmentEmpty]} />
-            <View style={[styles.segment, styles.segmentEmpty]} />
-            <View style={[styles.segment, styles.segmentFilledTop]} />
-            <View style={[styles.segment, styles.segmentFilledBottom]} />
+            <View style={[styles.segment, partesCheias >= 4 ? styles.segmentFilledTop : styles.segmentEmpty]} />
+            <View style={[styles.segment, partesCheias >= 3 ? styles.segmentFilledTop : styles.segmentEmpty]} />
+            <View style={[styles.segment, partesCheias >= 2 ? styles.segmentFilledTop : styles.segmentEmpty]} />
+            <View style={[styles.segment, partesCheias >= 1 ? styles.segmentFilledBottom : styles.segmentEmpty]} />
           </View>
         </View>
 
         <View style={styles.bubbleWrapper}>
           <View style={styles.bubbleCard}>
-            <Text style={styles.bubbleText}>
-              Faltam 180 pontos para ganhar um café grátis!
-            </Text>
+            <Text style={styles.bubbleText}>{mensagem}</Text>
           </View>
           <View style={styles.bubbleTail} />
         </View>

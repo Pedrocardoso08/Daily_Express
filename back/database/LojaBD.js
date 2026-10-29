@@ -107,7 +107,7 @@ class LojaBD{
     static getCupons(callback){
         const connection = LojaBD.connect()
 
-        var sql = 'select id, codigo, titulo, descricao, tipo, valor from cupons where ativo = true order by id desc'
+        var sql = 'select id, codigo, titulo, descricao, tipo, valor, date_format(validade, "%d/%m/%Y") as validade from cupons where ativo = true order by id desc'
 
         connection.query(sql, (error, results)=>{
             connection.end()

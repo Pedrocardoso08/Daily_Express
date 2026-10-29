@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# fotos de perfil enviadas pelo app (ficam só em cada computador, como o banco)
+back/fotos/
+
 # Expo
 .expo/
 dist/

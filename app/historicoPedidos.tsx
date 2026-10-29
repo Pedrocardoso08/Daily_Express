@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Text,
   TextInput,
@@ -8,9 +8,9 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { estiloLogo, logo, origemImagem } from '../lib/imagens';
-import { adicionarAoCarrinho, formatarPreco, loja, NOMES_TAMANHO, Pedido } from '../lib/loja';
+import { adicionarAoCarrinho, buscarPedidos, formatarPreco, loja, NOMES_TAMANHO, Pedido } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function HistoricoPedidosScreen() {
@@ -26,9 +26,17 @@ export default function HistoricoPedidosScreen() {
   }
 
   const [busca, setBusca] = useState('');
+  const [pedidos, setPedidos] = useState<Pedido[]>([...loja.pedidos]);
+
+  // Toda vez que a tela aparece, lê os pedidos do banco
+  useFocusEffect(
+    useCallback(() => {
+      buscarPedidos().then((lista) => setPedidos(lista));
+    }, [])
+  );
 
   // Mostra só os pedidos que têm algum produto com o nome pesquisado
-  const pedidosFiltrados = loja.pedidos.filter((pedido) =>
+  const pedidosFiltrados = pedidos.filter((pedido) =>
     pedido.itens.some((item) => item.nome.toLowerCase().includes(busca.toLowerCase()))
   );
 

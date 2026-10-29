@@ -12,20 +12,22 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { banner, estiloLogo, fotoPerfil, logo, origemImagem } from '../../lib/imagens';
+import { banner, estiloLogo, fotoDoUsuario, logo, origemImagem } from '../../lib/imagens';
 import {
   adicionarAoCarrinho,
   alternarFavorito,
+  buscarFavoritos,
   buscarProdutos,
   estaNoCarrinho,
   loja,
   paraNumero,
   ProdutoCatalogo,
   removerDoCarrinho,
+  sair,
 } from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
 
-const CATEGORIAS: { id: string; titulo: string; icone: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+const CATEGORIAS: { id: string; titulo: string; icone: any }[] = [
   { id: '1', titulo: 'Promoção', icone: 'gift' },
   { id: '2', titulo: 'Bebidas', icone: 'cafe' },
   { id: '3', titulo: 'Salgados', icone: 'fast-food' },
@@ -34,7 +36,7 @@ const CATEGORIAS: { id: string; titulo: string; icone: React.ComponentProps<type
 
 export default function HomeScreen() {
   const { escuro: modoEscuro, alternarTema } = useTema();
-  const flatListRef = useRef<FlatList<ProdutoCatalogo>>(null);
+  const flatListRef = useRef<any>(null);
   const [busca, setBusca] = useState('');
   const [categoriaAtiva, setCategoriaAtiva] = useState('Promoção');
   const [menuAberto, setMenuAberto] = useState(false);
@@ -43,11 +45,11 @@ export default function HomeScreen() {
   const [noCarrinho, setNoCarrinho] = useState<string[]>([]);
   const [catalogo, setCatalogo] = useState<ProdutoCatalogo[]>([...loja.produtos]);
 
-  // Toda vez que a tela aparece, lê o cardápio do banco e o carrinho da memória
+  // Toda vez que a tela aparece, lê o cardápio e os favoritos do banco e o carrinho da memória
   useFocusEffect(
     useCallback(() => {
       buscarProdutos().then((lista) => setCatalogo(lista));
-      setFavoritos(loja.favoritos.map((produto) => produto.nome));
+      buscarFavoritos().then((lista) => setFavoritos(lista.map((produto) => produto.nome)));
       setNoCarrinho(loja.carrinho.map((item) => item.nome));
     }, [])
   );
@@ -99,7 +101,7 @@ export default function HomeScreen() {
                 <Ionicons name="menu" size={32} color={cor('#fff')} />
               </TouchableOpacity>
               <Image source={logo} style={styles.miniLogo} resizeMode="contain" />
-              <Image source={fotoPerfil} style={styles.avatar} />
+              <Image source={fotoDoUsuario()} style={styles.avatar} />
             </View>
 
             <Text style={styles.welcomeText}>Bem vindo!</Text>
@@ -314,6 +316,18 @@ export default function HomeScreen() {
               >
                 <Ionicons name="information-circle-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Sobre nós</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
+                  sair();
+                  router.replace('/login');
+                }}
+              >
+                <Ionicons name="exit-outline" size={22} color={cor('#4A3525')} />
+                <Text style={styles.sidebarItemText}>Sair</Text>
               </TouchableOpacity>
             </View>
           </View>

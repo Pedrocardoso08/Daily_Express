@@ -7,7 +7,6 @@ import {
   ScrollView,
   Text,
   TextInput,
-  TextInputProps,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -31,7 +30,7 @@ const CATEGORIAS: CategoriaProduto[] = ['Promoção', 'Bebidas', 'Salgados', 'Do
 
 type Aba = 'produtos' | 'cupons';
 
-function voltarPara(router: ReturnType<typeof useRouter>) {
+function voltarPara(router: any) {
   if (router.canGoBack()) {
     router.back();
   } else {
@@ -543,14 +542,21 @@ function Cabecalho({ titulo, onVoltar }: { titulo: string; onVoltar: () => void 
   );
 }
 
-function Campo({ rotulo, style, ...props }: TextInputProps & { rotulo: string }) {
+// Caixa de texto com o título em cima. Recebe as mesmas coisas que um TextInput, mais o "rotulo".
+function Campo(props: any) {
   return (
     <View style={styles.campoGrupo}>
-      <Text style={styles.rotulo}>{rotulo}</Text>
+      <Text style={styles.rotulo}>{props.rotulo}</Text>
       <TextInput
         placeholderTextColor={cor('#8C837A')}
-        style={[styles.campo, props.multiline && styles.campoMultilinha, style]}
-        {...props}
+        value={props.value}
+        onChangeText={props.onChangeText}
+        placeholder={props.placeholder}
+        keyboardType={props.keyboardType}
+        autoCapitalize={props.autoCapitalize}
+        autoCorrect={props.autoCorrect}
+        multiline={props.multiline}
+        style={[styles.campo, props.multiline && styles.campoMultilinha]}
       />
     </View>
   );

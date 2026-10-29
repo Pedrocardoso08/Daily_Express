@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Text,
   TextInput,
@@ -11,7 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { estiloLogo, logo } from '../lib/imagens';
-import { Endereco, loja } from '../lib/loja';
+import { enviar } from '../lib/api';
+import { buscarEnderecos, Endereco, idUsuario, loja } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function EnderecosScreen() {
@@ -26,7 +27,7 @@ export default function EnderecosScreen() {
     }
   }
 
-  const [enderecos, setEnderecos] = useState(loja.enderecos);
+  const [enderecos, setEnderecos] = useState([...loja.enderecos]);
 
   // Formulário de novo endereço
   const [formAberto, setFormAberto] = useState(false);
@@ -37,13 +38,16 @@ export default function EnderecosScreen() {
   const [cidade, setCidade] = useState('');
   const [erro, setErro] = useState('');
 
-  function atualizarEnderecos(novaLista: Endereco[]) {
-    loja.enderecos = novaLista;
-    setEnderecos(novaLista);
-  }
+  // Lê os endereços do banco quando a tela abre
+  useEffect(() => {
+    buscarEnderecos().then((lista) => setEnderecos(lista));
+  }, []);
 
   const removerEndereco = (id: string) => {
-    atualizarEnderecos(enderecos.filter((item) => item.id !== id));
+    enviar('/removerEndereco', { id: id })
+      .then(() => buscarEnderecos())
+      .then((lista) => setEnderecos(lista))
+      .catch(() => {});
   };
 
   function fecharFormulario() {
@@ -62,17 +66,25 @@ export default function EnderecosScreen() {
       return;
     }
 
-    const novoEndereco: Endereco = {
-      id: String(Date.now()),
-      tipo,
+    enviar('/endereco', {
+      usuario: idUsuario(),
+      tipo: tipo,
       rua: rua.trim(),
       numero: numero.trim(),
       bairro: bairro.trim(),
       cidade: cidade.trim(),
-    };
-
-    atualizarEnderecos([...enderecos, novoEndereco]);
-    fecharFormulario();
+    })
+      .then((dados) => {
+        if (dados.error) {
+          setErro(dados.error);
+          return;
+        }
+        fecharFormulario();
+        buscarEnderecos().then((lista) => setEnderecos(lista));
+      })
+      .catch(() => {
+        setErro('Não foi possível conectar ao servidor.');
+      });
   }
 
   const renderHeader = () => (

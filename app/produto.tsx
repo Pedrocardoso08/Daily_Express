@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -14,10 +14,12 @@ import { origemImagem } from '../lib/imagens';
 import {
   adicionarAoCarrinho,
   alternarFavorito,
+  buscarFavoritos,
   ehFavorito,
   formatarPreco,
   paraNumero,
   precoPorTamanho,
+  sair,
 } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
@@ -64,6 +66,11 @@ export default function ProdutoDetalhesScreen() {
   const [favorito, setFavorito] = useState(ehFavorito(nome));
   const [tamanho, setTamanho] = useState<'P' | 'M' | 'G'>('P');
   const [quantidade, setQuantidade] = useState(1);
+
+  // Confere no banco se o produto está nos favoritos
+  useEffect(() => {
+    buscarFavoritos().then(() => setFavorito(ehFavorito(nome)));
+  }, [nome]);
 
   const aumentarQtd = () => setQuantidade((prev) => prev + 1);
   const diminuirQtd = () => setQuantidade((prev) => (prev > 1 ? prev - 1 : 1));
@@ -194,6 +201,18 @@ export default function ProdutoDetalhesScreen() {
               >
                 <Ionicons name="information-circle-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Sobre nós</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
+                  sair();
+                  router.replace('/login');
+                }}
+              >
+                <Ionicons name="exit-outline" size={22} color={cor('#4A3525')} />
+                <Text style={styles.sidebarItemText}>Sair</Text>
               </TouchableOpacity>
             </View>
           </View>

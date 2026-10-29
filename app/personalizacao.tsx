@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Text,
   TextInput,
@@ -9,7 +9,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { estiloLogo, fotoPerfil, logo } from '../lib/imagens';
+import * as ImagePicker from 'expo-image-picker';
+import { enviar } from '../lib/api';
+import { estiloLogo, fotoDoUsuario, logo } from '../lib/imagens';
+import { buscarPerfil, idUsuario, loja, salvarUsuario } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function PersonalizacaoScreen() {
@@ -24,10 +27,104 @@ export default function PersonalizacaoScreen() {
     }
   }
 
-  const [nomeUsuario, setNomeUsuario] = useState('Fulano de tal');
+  const [nomeUsuario, setNomeUsuario] = useState(loja.usuario ? loja.usuario.nome : '');
   const [tipoLeite, setTipoLeite] = useState('Integral');
   const [acucar, setAcucar] = useState('2 colheres');
   const [receberPromocoes, setReceberPromocoes] = useState('Não');
+  const [aviso, setAviso] = useState('');
+  const [foto, setFoto] = useState(fotoDoUsuario());
+
+  // Lê o nome, a foto e as preferências do banco quando a tela abre
+  useEffect(() => {
+    buscarPerfil().then((perfil) => {
+      if (!perfil) {
+        return;
+      }
+      setNomeUsuario(perfil.nome);
+      if (loja.usuario && perfil.foto) {
+        salvarUsuario({ ...loja.usuario, foto: perfil.foto });
+        setFoto(fotoDoUsuario());
+      }
+      // Sem a linha de preferências no banco, fica tudo no padrão
+      if (perfil.tipo_leite !== null) {
+        setTipoLeite(perfil.tipo_leite);
+        setAcucar(perfil.acucar);
+        setReceberPromocoes(perfil.receber_promocoes ? 'Sim' : 'Não');
+      }
+    });
+  }, []);
+
+  // Abre a galeria (no navegador, a janela de escolher arquivo) e manda a foto para o back-end
+  function trocarFoto() {
+    ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    }).then((resultado) => {
+      if (resultado.canceled) {
+        return;
+      }
+
+      // No celular a foto vem em "base64"; no navegador ela já vem dentro do "uri"
+      const imagem = resultado.assets[0].base64 ? resultado.assets[0].base64 : resultado.assets[0].uri;
+      setAviso('Enviando foto...');
+
+      enviar('/foto', { usuario: idUsuario(), imagem: imagem })
+        .then((dados) => {
+          if (dados.error) {
+            setAviso(dados.error);
+            return;
+          }
+          // Sem "foto" na resposta, o back-end está com o código antigo
+          if (!dados.foto) {
+            setAviso('O back-end não conhece a rota da foto. Reinicie o back-end (Ctrl+C e npm start).');
+            return;
+          }
+          if (loja.usuario) {
+            salvarUsuario({ ...loja.usuario, foto: dados.foto });
+          }
+          setFoto(fotoDoUsuario());
+          setAviso('Foto trocada!');
+        })
+        .catch(() => {
+          setAviso('Não foi possível enviar a foto.');
+        });
+    });
+  }
+
+  function salvar() {
+    if (nomeUsuario.trim() === '') {
+      setAviso('Digite o seu nome.');
+      return;
+    }
+
+    enviar('/preferencias', {
+      usuario: idUsuario(),
+      nome: nomeUsuario.trim(),
+      preferencias: {
+        tipo_leite: tipoLeite,
+        acucar: acucar,
+        receber_promocoes: receberPromocoes === 'Sim',
+      },
+    })
+      .then((dados) => {
+        if (dados.error) {
+          setAviso(dados.error);
+          return;
+        }
+
+        // Atualiza o nome que aparece no perfil
+        if (loja.usuario) {
+          salvarUsuario({ ...loja.usuario, nome: nomeUsuario.trim() });
+        }
+        setAviso('Salvo!');
+      })
+      .catch(() => {
+        setAviso('Não foi possível conectar ao servidor.');
+      });
+  }
 
   const opcoesLeiteCol1 = ['Normal', 'Integral', 'Desnatado'];
   const opcoesLeiteCol2 = ['Sem lactose', 'Vegetal', 'Vegano'];
@@ -92,10 +189,10 @@ export default function PersonalizacaoScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={[styles.cardBase, styles.photoCard]} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.cardBase, styles.photoCard]} activeOpacity={0.8} onPress={trocarFoto}>
             <View style={styles.photoContainer}>
               <Image
-                source={fotoPerfil}
+                source={foto}
                 style={styles.photoImage}
               />
             </View>
@@ -143,6 +240,12 @@ export default function PersonalizacaoScreen() {
             )}
           </View>
         </View>
+
+        {aviso !== '' && <Text style={styles.aviso}>{aviso}</Text>}
+
+        <TouchableOpacity style={styles.saveButton} onPress={salvar} activeOpacity={0.85}>
+          <Text style={styles.saveButtonText}>Salvar</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -311,5 +414,24 @@ const styles = criarEstilos({
     fontSize: 13,
     color: '#3B291A',
     fontWeight: '500',
+  },
+
+  aviso: {
+    fontSize: 13,
+    color: '#4A3525',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  saveButton: {
+    backgroundColor: '#4A3525',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

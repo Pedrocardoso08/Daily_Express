@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,12 +9,12 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { fotoPerfil } from '../../lib/imagens';
-import { loja } from '../../lib/loja';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { fotoDoUsuario } from '../../lib/imagens';
+import { loja, sair } from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
 
-const FUNCOES: { id: string; titulo: string; icone: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+const FUNCOES: { id: string; titulo: string; icone: any }[] = [
   { id: '1', titulo: 'Fidelidade', icone: 'star' },
   { id: '2', titulo: 'Personalização', icone: 'pencil' },
   { id: '3', titulo: 'Cartões', icone: 'card' },
@@ -29,11 +29,20 @@ export default function PerfilScreen() {
 
   const [menuAberto, setMenuAberto] = useState(false);
   const [confirmarSaida, setConfirmarSaida] = useState(false);
+  const [nome, setNome] = useState(loja.usuario ? loja.usuario.nome : 'Visitante');
+  const [foto, setFoto] = useState(fotoDoUsuario());
+
+  // Pega o nome e a foto de novo quando volta da tela de Personalização
+  useFocusEffect(
+    useCallback(() => {
+      setNome(loja.usuario ? loja.usuario.nome : 'Visitante');
+      setFoto(fotoDoUsuario());
+    }, [])
+  );
 
   function sairDaConta() {
     setConfirmarSaida(false);
-    loja.usuario = null;
-    loja.acessoFuncionario = false;
+    sair();
     router.replace('/login');
   }
 
@@ -202,6 +211,17 @@ export default function PerfilScreen() {
                 <Ionicons name="information-circle-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Sobre nós</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
+                  setConfirmarSaida(true);
+                }}
+              >
+                <Ionicons name="exit-outline" size={22} color={cor('#4A3525')} />
+                <Text style={styles.sidebarItemText}>Sair</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -222,7 +242,7 @@ export default function PerfilScreen() {
 
             <View style={styles.avatarWrapper}>
               <Image
-                source={fotoPerfil}
+                source={foto}
                 style={styles.avatarImage}
               />
             </View>
@@ -230,7 +250,7 @@ export default function PerfilScreen() {
         </View>
 
         <View style={styles.userInfoSection}>
-          <Text style={styles.userName}>{loja.usuario ? loja.usuario.nome : 'Visitante'}</Text>
+          <Text style={styles.userName}>{nome}</Text>
           <Text style={styles.userLoginDate}>
             {loja.usuario ? 'Logado em ' + loja.usuario.logadoEm : 'Não logado'}
           </Text>

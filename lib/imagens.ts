@@ -1,4 +1,6 @@
 import { ImageSourcePropType } from 'react-native';
+import { API } from './api';
+import { loja } from './loja';
 
 // Logo da cafeteria, pasta imagens/
 export const logo = require('../imagens/logo.png');
@@ -12,6 +14,14 @@ export const estiloLogo = {
 export const banner = require('../imagens/banner.jpg');
 export const fotoPerfil = require('../imagens/perfil.jpg');
 export const mapa = require('../imagens/mapa.jpg');
+
+// Foto do usuário logado (vem do back-end). Sem foto, usa a imagem padrão.
+export function fotoDoUsuario() {
+  if (loja.usuario && loja.usuario.foto) {
+    return { uri: API + '/' + loja.usuario.foto };
+  }
+  return fotoPerfil;
+}
 
 const capuccino = require('../imagens/capuccino.jpg');
 const croissant = require('../imagens/croissant.jpg');

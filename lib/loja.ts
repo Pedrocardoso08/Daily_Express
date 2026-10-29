@@ -1,7 +1,9 @@
 // Dados compartilhados entre as telas enquanto o app está aberto.
-// Produtos e cupons também são lidos do back-end (pastas back/ e database/).
+// Os dados do cliente (pedidos, endereços, favoritos, cartões) vêm do back-end
+// (pastas back/ e database/) pelas funções "buscar..." no fim deste arquivo.
 
-import { API } from './api';
+import { Platform } from 'react-native';
+import { buscar, enviar } from './api';
 
 export type Tamanho = 'P' | 'M' | 'G';
 
@@ -70,6 +72,16 @@ export type CupomLoja = {
   descricao: string;
   tipo: 'porcentagem' | 'valor';
   valor: number;
+  validade: string;
+};
+
+export type Usuario = {
+  id: number;
+  nome: string;
+  email: string;
+  logadoEm: string;
+  // Caminho da foto no back-end, ex.: "fotos/usuario_1_123.jpg". Vazio = foto padrão.
+  foto?: string;
 };
 
 // --- PREÇOS ---
@@ -106,172 +118,68 @@ export function calcularDesconto(codigo: string, subtotal: number) {
   return Math.min(desconto, subtotal);
 }
 
+// --- LOGIN SALVO ---
+// No navegador, o usuário fica guardado no localStorage e o login continua
+// depois de recarregar a página. No celular (Expo Go) não existe localStorage,
+// então lá o login some quando o app fecha.
+
+function temLocalStorage() {
+  return Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage;
+}
+
+function lerUsuarioSalvo() {
+  if (!temLocalStorage()) {
+    return null;
+  }
+  const texto = window.localStorage.getItem('usuario');
+  if (!texto) {
+    return null;
+  }
+  return JSON.parse(texto) as Usuario;
+}
+
 // --- DADOS ---
 
+// Fotos usadas só quando o servidor está desligado
 const IMG_CAPUCCINO = 'https://images.unsplash.com/photo-1534778101976-62847782c213?q=80&w=400&auto=format&fit=crop';
 const IMG_CROISSANT = 'https://images.unsplash.com/photo-1550617931-e17a7b70dce2?q=80&w=400&auto=format&fit=crop';
 const IMG_CHEESECAKE = 'https://images.unsplash.com/photo-1533134242443-d4fd01530ae1?q=80&w=400&auto=format&fit=crop';
 const IMG_MOCHA = 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?q=80&w=400&auto=format&fit=crop';
 const IMG_COMBO = 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?q=80&w=400&auto=format&fit=crop';
 
-export type Usuario = {
-  id: number;
-  nome: string;
-  email: string;
-  logadoEm: string;
-};
-
 export const loja = {
   // Preenchido no login (vem do back-end)
-  usuario: null as Usuario | null,
+  usuario: lerUsuarioSalvo(),
 
   // Liberado na tela de funcionários depois do código
   acessoFuncionario: false,
 
+  // Cardápio e cupons de reserva, usados só se o servidor estiver desligado
   produtos: [
-    {
-      id: '1',
-      nome: 'Capuccino clássico',
-      desc: 'Leite vaporizado e expresso cremoso',
-      nota: '4.9',
-      precoAntigo: '18,90',
-      precoNovo: '13,90',
-      categoria: 'Promoção',
-      imagem: IMG_CAPUCCINO,
-    },
-    {
-      id: '2',
-      nome: 'Latte + Cheesecake',
-      desc: 'Latte suave com fatia de frutas vermelhas',
-      nota: '4.7',
-      precoAntigo: '35,80',
-      precoNovo: '28,90',
-      categoria: 'Promoção',
-      imagem: IMG_CHEESECAKE,
-    },
-    {
-      id: '3',
-      nome: 'Combo Lanche Leve',
-      desc: 'Sanduíche natural e chá gelado de pêssego',
-      nota: '4.6',
-      precoAntigo: '30,80',
-      precoNovo: '25,90',
-      categoria: 'Promoção',
-      imagem: IMG_COMBO,
-    },
-    {
-      id: '4',
-      nome: 'Mocha Especial',
-      desc: 'Leite vaporizado, calda de chocolate belga',
-      nota: '4.7',
-      precoAntigo: '15,90',
-      precoNovo: '12,90',
-      categoria: 'Promoção',
-      imagem: IMG_MOCHA,
-    },
-    {
-      id: '5',
-      nome: 'Combo Choc. Quente',
-      desc: 'Chocolate quente cremoso e biscoitos',
-      nota: '4.9',
-      precoAntigo: '35,80',
-      precoNovo: '29,90',
-      categoria: 'Promoção',
-      imagem: 'https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: '6',
-      nome: 'Croissant Presunto',
-      desc: 'Massa folhada recheada com queijo derretido',
-      nota: '4.8',
-      precoAntigo: '17,90',
-      precoNovo: '14,90',
-      categoria: 'Promoção',
-      imagem: IMG_CROISSANT,
-    },
-    {
-      id: '7',
-      nome: 'Espresso + Cookie',
-      desc: 'Espresso duplo e cookie com gotas de cacau',
-      nota: '4.8',
-      precoAntigo: '22,00',
-      precoNovo: '16,50',
-      categoria: 'Promoção',
-      imagem: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-      id: '8',
-      nome: 'Frappuccino Caramelo',
-      desc: 'Café batido gelado com chantilly e calda',
-      nota: '4.9',
-      precoAntigo: '24,90',
-      precoNovo: '19,90',
-      categoria: 'Promoção',
-      imagem: 'https://images.unsplash.com/photo-1577968897966-3d4325b36b61?q=80&w=400&auto=format&fit=crop',
-    },
+    { id: '1', nome: 'Capuccino clássico', desc: 'Leite vaporizado e expresso cremoso', nota: '4.9', precoAntigo: '18,90', precoNovo: '13,90', categoria: 'Promoção', imagem: IMG_CAPUCCINO },
+    { id: '2', nome: 'Latte + Cheesecake', desc: 'Latte suave com fatia de frutas vermelhas', nota: '4.7', precoAntigo: '35,80', precoNovo: '28,90', categoria: 'Promoção', imagem: IMG_CHEESECAKE },
+    { id: '3', nome: 'Combo Lanche Leve', desc: 'Sanduíche natural e chá gelado de pêssego', nota: '4.6', precoAntigo: '30,80', precoNovo: '25,90', categoria: 'Promoção', imagem: IMG_COMBO },
+    { id: '4', nome: 'Mocha Especial', desc: 'Leite vaporizado, calda de chocolate belga', nota: '4.7', precoAntigo: '15,90', precoNovo: '12,90', categoria: 'Promoção', imagem: IMG_MOCHA },
+    { id: '5', nome: 'Combo Choc. Quente', desc: 'Chocolate quente cremoso e biscoitos', nota: '4.9', precoAntigo: '35,80', precoNovo: '29,90', categoria: 'Promoção', imagem: '' },
+    { id: '6', nome: 'Croissant Presunto', desc: 'Massa folhada recheada com queijo derretido', nota: '4.8', precoAntigo: '17,90', precoNovo: '14,90', categoria: 'Promoção', imagem: IMG_CROISSANT },
+    { id: '7', nome: 'Espresso + Cookie', desc: 'Espresso duplo e cookie com gotas de cacau', nota: '4.8', precoAntigo: '22,00', precoNovo: '16,50', categoria: 'Promoção', imagem: '' },
+    { id: '8', nome: 'Frappuccino Caramelo', desc: 'Café batido gelado com chantilly e calda', nota: '4.9', precoAntigo: '24,90', precoNovo: '19,90', categoria: 'Promoção', imagem: '' },
   ] as ProdutoCatalogo[],
 
   cupons: [
-    { id: '1', codigo: 'CAFE10', titulo: '10% OFF', descricao: 'Valido até dia **/**/**', tipo: 'porcentagem', valor: 10 },
-    { id: '2', codigo: 'FRETEGRÁTIS', titulo: 'Entrega grátis', descricao: 'Pedido acima de R$**,**', tipo: 'valor', valor: 5 },
-    { id: '3', codigo: 'ANIVERSÁRIO', titulo: 'Sobremesa grátis', descricao: 'Válido até dia **/**/**', tipo: 'valor', valor: 11.9 },
+    { id: '1', codigo: 'CAFE10', titulo: '10% OFF', descricao: 'Desconto de 10% em qualquer pedido', tipo: 'porcentagem', valor: 10, validade: '31/12/2026' },
+    { id: '2', codigo: 'FRETEGRÁTIS', titulo: 'Entrega grátis', descricao: 'R$ 5,00 de desconto na entrega', tipo: 'valor', valor: 5, validade: '31/12/2026' },
+    { id: '3', codigo: 'ANIVERSÁRIO', titulo: 'Sobremesa grátis', descricao: 'Uma sobremesa grátis (R$ 11,90) no mês do seu aniversário', tipo: 'valor', valor: 11.9, validade: '31/12/2026' },
   ] as CupomLoja[],
 
+  // O carrinho fica só na memória do app
   carrinho: [] as ItemCarrinho[],
+
+  // Estes vêm do banco, pelas funções "buscar..." lá embaixo
   favoritos: [] as ProdutoFavorito[],
-
-  cartoes: [
-    { id: '1', nome: 'Visa final 4821', numero: '**** **** **** 4821', validade: 'Validade 08/30' },
-    { id: '2', nome: 'Mastercard final 9927', numero: '**** **** **** 9927', validade: 'Validade 11/29' },
-    { id: '3', nome: 'Alimentação final 5371', numero: '**** **** **** 5371', validade: 'Validade 01/27' },
-  ] as Cartao[],
-
-  enderecos: [
-    { id: '1', tipo: 'CASA', rua: 'Rua Exemplo', numero: '100', bairro: 'Centro', cidade: 'Criciúma - SC' },
-    { id: '2', tipo: 'EMPRESA', rua: 'Rua Exemplo', numero: '200', bairro: 'Centro', cidade: 'Criciúma - SC' },
-  ] as Endereco[],
-
-  pedidos: [
-    {
-      id: '3',
-      data: '01/10/2026',
-      status: 'Entregue',
-      modo: 'Levar',
-      endereco: 'Rua Exemplo, 100 - Centro, Criciúma - SC',
-      total: 28.8,
-      itens: [
-        { id: 'a1', nome: 'Capuccino clássico', desc: 'Leite vaporizado e expresso cremoso', tamanho: 'P', opcional: 'Sem açúcar', precoUnitario: 13.9, qtd: 1, imagem: IMG_CAPUCCINO },
-        { id: 'a2', nome: 'Croissant Presunto', desc: 'Massa folhada recheada com queijo derretido', tamanho: 'P', opcional: '---', precoUnitario: 14.9, qtd: 1, imagem: IMG_CROISSANT },
-      ],
-    },
-    {
-      id: '2',
-      data: '24/09/2026',
-      status: 'Entregue',
-      modo: 'Comer aqui',
-      endereco: '',
-      total: 25.8,
-      itens: [
-        { id: 'b1', nome: 'Capuccino clássico', desc: 'Leite vaporizado e expresso cremoso', tamanho: 'P', opcional: 'Sem açúcar', precoUnitario: 13.9, qtd: 1, imagem: IMG_CAPUCCINO },
-        { id: 'b2', nome: 'Cheesecake', desc: 'Sobremesa gelada clássica', tamanho: 'P', opcional: '---', precoUnitario: 11.9, qtd: 1, imagem: IMG_CHEESECAKE },
-      ],
-    },
-    {
-      id: '1',
-      data: '15/09/2026',
-      status: 'Entregue',
-      modo: 'Levar',
-      endereco: 'Rua Exemplo, 200 - Centro, Criciúma - SC',
-      total: 38.8,
-      itens: [
-        { id: 'c1', nome: 'Mocha Especial', desc: 'Leite vaporizado, calda de chocolate belga', tamanho: 'P', opcional: '---', precoUnitario: 12.9, qtd: 1, imagem: IMG_MOCHA },
-        { id: 'c2', nome: 'Combo Lanche Leve', desc: 'Sanduíche natural e chá gelado de pêssego', tamanho: 'P', opcional: '---', precoUnitario: 25.9, qtd: 1, imagem: IMG_COMBO },
-      ],
-    },
-  ] as Pedido[],
-
-  idioma: 'pt' as 'pt' | 'en' | 'es',
-  volume: 70,
+  cartoes: [] as Cartao[],
+  enderecos: [] as Endereco[],
+  pedidos: [] as Pedido[],
 
   // Preenchidos durante a compra
   cupom: '',
@@ -280,6 +188,37 @@ export const loja = {
   modo: '',
   enderecoEntrega: '',
 };
+
+// Id do usuário logado, usado em todas as rotas do cliente
+export function idUsuario() {
+  return loja.usuario ? loja.usuario.id : 0;
+}
+
+export function salvarUsuario(usuario: Usuario | null) {
+  loja.usuario = usuario;
+
+  if (temLocalStorage()) {
+    if (usuario) {
+      window.localStorage.setItem('usuario', JSON.stringify(usuario));
+    } else {
+      window.localStorage.removeItem('usuario');
+    }
+  }
+}
+
+// Sai da conta e limpa os dados do usuário que estava logado
+export function sair() {
+  salvarUsuario(null);
+  loja.acessoFuncionario = false;
+  loja.carrinho = [];
+  loja.favoritos = [];
+  loja.cartoes = [];
+  loja.enderecos = [];
+  loja.pedidos = [];
+  loja.cupom = '';
+  loja.subtotal = 0;
+  loja.desconto = 0;
+}
 
 // --- FUNÇÕES DO CARRINHO ---
 
@@ -308,12 +247,17 @@ export function ehFavorito(nome: string) {
   return loja.favoritos.some((produto) => produto.nome === nome);
 }
 
+// Muda na tela na hora e manda para o banco sem esperar a resposta
 export function alternarFavorito(produto: ProdutoFavorito) {
-  if (ehFavorito(produto.nome)) {
-    loja.favoritos = loja.favoritos.filter((item) => item.nome !== produto.nome);
-  } else {
+  const favorito = !ehFavorito(produto.nome);
+
+  if (favorito) {
     loja.favoritos.push(produto);
+  } else {
+    loja.favoritos = loja.favoritos.filter((item) => item.nome !== produto.nome);
   }
+
+  enviar('/favorito', { usuario: idUsuario(), nome: produto.nome, favorito: favorito }).catch(() => {});
 }
 
 // --- OUTRAS ---
@@ -329,48 +273,20 @@ export function dataDeHoje() {
   return `${dia}/${mes}/${hoje.getFullYear()}`;
 }
 
-export function cadastrarProduto(dados: Omit<ProdutoCatalogo, 'id'>) {
-  loja.produtos.unshift({ ...dados, id: String(Date.now()) });
-}
-
-export function removerProduto(id: string) {
-  loja.produtos = loja.produtos.filter((produto) => produto.id !== id);
-}
-
-export function cadastrarCupom(dados: Omit<CupomLoja, 'id'>) {
-  const codigo = dados.codigo.trim().toUpperCase();
-  const repetido = loja.cupons.some((cupom) => cupom.codigo.toUpperCase() === codigo);
-  if (repetido) {
-    return false;
-  }
-  loja.cupons.unshift({ ...dados, codigo, id: String(Date.now()) });
-  return true;
-}
-
-export function removerCupom(id: string) {
-  const cupom = loja.cupons.find((item) => item.id === id);
-  loja.cupons = loja.cupons.filter((item) => item.id !== id);
-  if (cupom && loja.cupom.toUpperCase() === cupom.codigo.toUpperCase()) {
-    loja.cupom = '';
-    loja.desconto = 0;
-  }
-}
-
-function textoPreco(valor: unknown) {
+// 13.9 vira "13,90". Vazio quando não tem preço (ex.: produto sem preço antigo).
+function textoPreco(valor: any) {
   if (valor === null || valor === undefined || valor === '') {
     return '';
   }
-  const numero = Number(valor);
-  if (!Number.isFinite(numero)) {
-    return '';
-  }
-  return numero.toFixed(2).replace('.', ',');
+  return Number(valor).toFixed(2).replace('.', ',');
 }
 
-// Lê o cardápio do banco. Se o servidor estiver desligado, fica a lista que já estava na tela.
+// --- BUSCAR NO BANCO ---
+// Cada função pede a lista ao back-end, guarda no objeto loja e devolve a lista.
+// Se o servidor estiver desligado, devolve o que já estava guardado.
+
 export function buscarProdutos() {
-  return fetch(API + '/produtos')
-    .then((response) => response.json())
+  return buscar('/produtos')
     .then((lista) => {
       if (!Array.isArray(lista)) {
         return [...loja.produtos];
@@ -384,9 +300,7 @@ export function buscarProdutos() {
         precoAntigo: textoPreco(item.preco_antigo),
         precoNovo: textoPreco(item.preco),
         categoria: item.categoria,
-        imagem: item.imagem
-          ? item.imagem
-          : 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400&auto=format&fit=crop',
+        imagem: item.imagem ? item.imagem : '',
       }));
 
       return [...loja.produtos];
@@ -394,10 +308,9 @@ export function buscarProdutos() {
     .catch(() => [...loja.produtos]);
 }
 
-// Lê os cupons do banco. O carrinho usa essa lista para calcular o desconto.
+// O carrinho usa essa lista para calcular o desconto
 export function buscarCupons() {
-  return fetch(API + '/cupons')
-    .then((response) => response.json())
+  return buscar('/cupons')
     .then((lista) => {
       if (!Array.isArray(lista)) {
         return [...loja.cupons];
@@ -410,9 +323,89 @@ export function buscarCupons() {
         descricao: item.descricao ? item.descricao : '',
         tipo: item.tipo === 'PORCENTAGEM' ? 'porcentagem' : 'valor',
         valor: Number(item.valor),
+        validade: item.validade ? item.validade : '',
       }));
 
       return [...loja.cupons];
     })
     .catch(() => [...loja.cupons]);
+}
+
+export function buscarFavoritos() {
+  return buscar('/favoritos?usuario=' + idUsuario())
+    .then((lista) => {
+      if (!Array.isArray(lista)) {
+        return [...loja.favoritos];
+      }
+
+      loja.favoritos = lista.map((item) => ({
+        nome: item.nome,
+        desc: item.descricao_curta,
+        nota: Number(item.nota).toFixed(1),
+        preco: textoPreco(item.preco),
+        imagem: item.imagem ? item.imagem : '',
+      }));
+
+      return [...loja.favoritos];
+    })
+    .catch(() => [...loja.favoritos]);
+}
+
+// O back-end já devolve os pedidos no formato do tipo Pedido
+export function buscarPedidos() {
+  return buscar('/pedidos?usuario=' + idUsuario())
+    .then((lista) => {
+      if (Array.isArray(lista)) {
+        loja.pedidos = lista;
+      }
+      return [...loja.pedidos];
+    })
+    .catch(() => [...loja.pedidos]);
+}
+
+export function buscarEnderecos() {
+  return buscar('/enderecos?usuario=' + idUsuario())
+    .then((lista) => {
+      if (!Array.isArray(lista)) {
+        return [...loja.enderecos];
+      }
+
+      loja.enderecos = lista.map((item) => ({
+        id: String(item.id),
+        tipo: item.tipo,
+        rua: item.rua,
+        numero: item.numero,
+        bairro: item.bairro,
+        cidade: item.cidade,
+      }));
+
+      return [...loja.enderecos];
+    })
+    .catch(() => [...loja.enderecos]);
+}
+
+export function buscarCartoes() {
+  return buscar('/cartoes?usuario=' + idUsuario())
+    .then((lista) => {
+      if (!Array.isArray(lista)) {
+        return [...loja.cartoes];
+      }
+
+      loja.cartoes = lista.map((item) => ({
+        id: String(item.id),
+        nome: item.nome,
+        numero: '**** **** **** ' + item.ultimos_digitos,
+        validade: 'Validade ' + item.validade,
+      }));
+
+      return [...loja.cartoes];
+    })
+    .catch(() => [...loja.cartoes]);
+}
+
+// Nome, pontos e preferências. Devolve null se o servidor estiver desligado.
+export function buscarPerfil() {
+  return buscar('/perfil?usuario=' + idUsuario())
+    .then((perfil) => (perfil.error ? null : perfil))
+    .catch(() => null);
 }

@@ -5,7 +5,7 @@ import { StyleSheet } from 'react-native';
 // As telas continuam escrevendo as cores do modo claro; aqui cada cor clara
 // ganha a sua versão escura, separada por tipo (fundo, borda e texto).
 
-const FUNDO_ESCURO: Record<string, string> = {
+const FUNDO_ESCURO: any = {
   '#EAD1A8': '#1E1611',
   '#C9A075': '#3A2A1E',
   '#F6EBDD': '#2C211A',
@@ -18,7 +18,7 @@ const FUNDO_ESCURO: Record<string, string> = {
   '#3B291A': '#8B6A4A',
 };
 
-const BORDA_ESCURA: Record<string, string> = {
+const BORDA_ESCURA: any = {
   '#4A3525': '#C9A075',
   '#E4D3C4': '#5A4535',
   '#D3BFAB': '#5A4535',
@@ -27,7 +27,7 @@ const BORDA_ESCURA: Record<string, string> = {
   '#FFFDF9': '#33261D',
 };
 
-const TEXTO_ESCURO: Record<string, string> = {
+const TEXTO_ESCURO: any = {
   '#4A3525': '#F3E6D3',
   '#3B291A': '#F3E6D3',
   '#2A1F17': '#F3E6D3',
@@ -49,28 +49,31 @@ const COR_LOGO_ESCURO = '#EAD1A8';
 
 let escuroAtual = false;
 
-function trocar(tabela: Record<string, string>, valor: unknown) {
+// Procura a cor na tabela. Se não achar, devolve a mesma cor.
+function trocar(tabela: any, valor: any) {
   if (typeof valor !== 'string') {
     return valor;
   }
-  return tabela[valor.toUpperCase()] ?? valor;
+  const novaCor = tabela[valor.toUpperCase()];
+  return novaCor ? novaCor : valor;
 }
 
 // Para cores escritas direto na tela, como color="#4A3525" nos ícones
 export function cor(valor: string) {
-  return escuroAtual ? (trocar(TEXTO_ESCURO, valor) as string) : valor;
+  return escuroAtual ? trocar(TEXTO_ESCURO, valor) : valor;
 }
 
 // Para fundos escritos direto na tela, fora de um criarEstilos
 export function fundo(valor: string) {
-  return escuroAtual ? (trocar(FUNDO_ESCURO, valor) as string) : valor;
+  return escuroAtual ? trocar(FUNDO_ESCURO, valor) : valor;
 }
 
-function versaoEscura(estilos: Record<string, Record<string, unknown>>) {
-  const escuros: Record<string, Record<string, unknown>> = {};
+// Copia os estilos trocando as cores claras pelas escuras
+function versaoEscura(estilos: any) {
+  const escuros: any = {};
 
   Object.keys(estilos).forEach((nome) => {
-    const estilo: Record<string, unknown> = { ...estilos[nome] };
+    const estilo = { ...estilos[nome] };
 
     Object.keys(estilo).forEach((propriedade) => {
       if (propriedade === 'backgroundColor') {
@@ -82,7 +85,7 @@ function versaoEscura(estilos: Record<string, Record<string, unknown>>) {
       }
     });
 
-    if (/logo/i.test(nome) || nome === 'brandImage') {
+    if (nome.toLowerCase().includes('logo') || nome === 'brandImage') {
       estilo.tintColor = COR_LOGO_ESCURO;
     }
 
@@ -92,31 +95,23 @@ function versaoEscura(estilos: Record<string, Record<string, unknown>>) {
   return escuros;
 }
 
-// Usado no lugar do StyleSheet.create: guarda a versão clara e a escura
-// e entrega a do tema atual.
-export function criarEstilos<T extends StyleSheet.NamedStyles<T> | StyleSheet.NamedStyles<any>>(
-  estilos: T & StyleSheet.NamedStyles<any>
-): T {
-  const claro = StyleSheet.create(estilos) as Record<string | symbol, unknown>;
-  const escuro = StyleSheet.create(
-    versaoEscura(estilos as Record<string, Record<string, unknown>>)
-  ) as Record<string | symbol, unknown>;
+// Usado no lugar do StyleSheet.create: guarda a versão clara e a escura.
+// O "Proxy" é um objeto que decide na hora o que devolver: quando a tela pede
+// styles.container, ele entrega o container claro ou o escuro, conforme o tema.
+export function criarEstilos(estilos: any): any {
+  const claro: any = StyleSheet.create(estilos);
+  const escuro: any = StyleSheet.create(versaoEscura(estilos));
 
   return new Proxy(claro, {
-    get(_alvo, nome) {
+    get(alvo: any, nome: any) {
       return escuroAtual ? escuro[nome] : claro[nome];
     },
-  }) as T;
+  });
 }
 
-type Tema = {
-  escuro: boolean;
-  alternarTema: () => void;
-};
+const TemaContexto = createContext({ escuro: false, alternarTema: () => {} });
 
-const TemaContexto = createContext<Tema>({ escuro: false, alternarTema: () => {} });
-
-export function TemaProvider({ children }: { children: React.ReactNode }) {
+export function TemaProvider(props: any) {
   const [escuro, setEscuro] = useState(false);
 
   function alternarTema() {
@@ -125,8 +120,8 @@ export function TemaProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <TemaContexto.Provider value={{ escuro, alternarTema }}>
-      {children}
+    <TemaContexto.Provider value={{ escuro: escuro, alternarTema: alternarTema }}>
+      {props.children}
     </TemaContexto.Provider>
   );
 }

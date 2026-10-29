@@ -8,7 +8,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { dataDeHoje, formatarPreco, loja } from '../lib/loja';
+import { enviar } from '../lib/api';
+import { formatarPreco, idUsuario, loja } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
  
 export default function PagamentoScreen() {
@@ -33,26 +34,53 @@ export default function PagamentoScreen() {
   }
 
   const total = Math.max(0, loja.subtotal - loja.desconto);
+  const [erro, setErro] = useState('');
+  const [carregando, setCarregando] = useState(false);
 
-  // Salva o pedido no histórico e esvazia o carrinho
+  // Salva o pedido no banco e esvazia o carrinho
   const handleFinalizar = () => {
-    if (loja.carrinho.length > 0) {
-      loja.pedidos.unshift({
-        id: String(Date.now()),
-        data: dataDeHoje(),
-        status: 'Preparando',
-        itens: loja.carrinho.map((item) => ({ ...item })),
-        total,
-        modo: loja.modo,
-        endereco: loja.modo === 'Levar' ? loja.enderecoEntrega : '',
-      });
+    if (loja.carrinho.length === 0) {
+      setErro('O carrinho está vazio.');
+      return;
     }
 
-    loja.carrinho = [];
-    loja.cupom = '';
-    loja.subtotal = 0;
-    loja.desconto = 0;
-    router.replace('/finalizado');
+    if (exibirFormularioCartao && (nomeTitular === '' || numeroCartao === '' || validade === '' || cvv === '')) {
+      setErro('Preencha os dados do cartão.');
+      return;
+    }
+
+    setErro('');
+    setCarregando(true);
+
+    enviar('/pedido', {
+      usuario: idUsuario(),
+      modo: loja.modo,
+      endereco: loja.modo === 'Levar' ? loja.enderecoEntrega : '',
+      formaPagamento: formaSelecionada,
+      cupom: loja.cupom,
+      subtotal: loja.subtotal,
+      desconto: loja.desconto,
+      total: total,
+      itens: loja.carrinho,
+    })
+      .then((dados) => {
+        setCarregando(false);
+
+        if (dados.error) {
+          setErro(dados.error);
+          return;
+        }
+
+        loja.carrinho = [];
+        loja.cupom = '';
+        loja.subtotal = 0;
+        loja.desconto = 0;
+        router.replace('/finalizado');
+      })
+      .catch(() => {
+        setCarregando(false);
+        setErro('Não foi possível conectar ao servidor. Confira se o back-end e o MySQL estão ligados.');
+      });
   };
  
   // Verifica se a opção atual requer o preenchimento de dados do cartão
@@ -260,13 +288,16 @@ export default function PagamentoScreen() {
 </TouchableOpacity>
 </View>
  
+        {erro !== '' && <Text style={styles.erroText}>{erro}</Text>}
+
         {/* 5. BOTÃO FINALIZAR */}
 <TouchableOpacity 
-          style={styles.submitButton} 
+          style={[styles.submitButton, carregando && styles.submitButtonDisabled]} 
           onPress={handleFinalizar}
+          disabled={carregando}
           activeOpacity={0.85}
 >
-<Text style={styles.submitButtonText}>Finalizar</Text>
+<Text style={styles.submitButtonText}>{carregando ? 'Enviando...' : 'Finalizar'}</Text>
 </TouchableOpacity>
 </ScrollView>
 </View>
@@ -479,5 +510,14 @@ const styles = criarEstilos({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  erroText: {
+    color: '#B3261E',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 12,
   },
 });

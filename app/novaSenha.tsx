@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { Text, TextInput, View, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { enviar } from '../lib/api';
 import { estiloLogo, logo } from '../lib/imagens';
+import { loja } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function NovaSenhaScreen() {
   useTema();
   const router = useRouter();
+  // E-mail e código vêm da tela esqueciSenha
+  const { email, codigo } = useLocalSearchParams();
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -25,7 +29,23 @@ export default function NovaSenhaScreen() {
       return;
     }
 
-    router.replace({ pathname: '/login', params: { senhaAlterada: '1' } });
+    enviar('/novaSenha', { email: email, codigo: codigo, senha: senha })
+      .then((dados) => {
+        if (dados.error) {
+          setErro(dados.error);
+          return;
+        }
+
+        // Quem veio pelo perfil continua logado; quem veio pelo login volta para lá
+        if (loja.usuario) {
+          router.replace('/perfil');
+        } else {
+          router.replace({ pathname: '/login', params: { senhaAlterada: '1' } });
+        }
+      })
+      .catch(() => {
+        setErro('Não foi possível conectar ao servidor.');
+      });
   }
 
   return (

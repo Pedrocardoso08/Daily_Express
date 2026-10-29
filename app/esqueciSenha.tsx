@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import { Text, TextInput, View, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { enviar } from '../lib/api';
 import { estiloLogo, logo } from '../lib/imagens';
+import { loja } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function EsqueceuSenhaScreen() {
   useTema();
   const router = useRouter();
   const [etapa, setEtapa] = useState('email');
-  const [email, setEmail] = useState('');
+  // Se já está logado (botão Senha do perfil), o e-mail já vem preenchido
+  const [email, setEmail] = useState(loja.usuario ? loja.usuario.email : '');
   const [codigo, setCodigo] = useState('');
+  const [codigoGerado, setCodigoGerado] = useState('');
   const [erro, setErro] = useState('');
 
   function handleConfirmarEmail() {
@@ -19,8 +23,19 @@ export default function EsqueceuSenhaScreen() {
       return;
     }
 
-    setErro('');
-    setEtapa('codigo');
+    enviar('/esqueciSenha', { email: email.trim() })
+      .then((dados) => {
+        if (dados.error) {
+          setErro(dados.error);
+          return;
+        }
+        setErro('');
+        setCodigoGerado(dados.codigo);
+        setEtapa('codigo');
+      })
+      .catch(() => {
+        setErro('Não foi possível conectar ao servidor.');
+      });
   }
 
   function handleConfirmarCodigo() {
@@ -29,7 +44,17 @@ export default function EsqueceuSenhaScreen() {
       return;
     }
 
-    router.push('/novaSenha');
+    enviar('/conferirCodigo', { email: email.trim(), codigo: codigo.trim() })
+      .then((dados) => {
+        if (dados.error) {
+          setErro(dados.error);
+          return;
+        }
+        router.push({ pathname: '/novaSenha', params: { email: email.trim(), codigo: codigo.trim() } });
+      })
+      .catch(() => {
+        setErro('Não foi possível conectar ao servidor.');
+      });
   }
 
   return (
@@ -77,6 +102,11 @@ export default function EsqueceuSenhaScreen() {
         ) : (
           <>
             <Text style={styles.pageTitleCodigo}>Código</Text>
+
+            {/* Não temos servidor de e-mail, então o código aparece aqui */}
+            <Text style={styles.descriptionText}>
+              Seu código é {codigoGerado}. Ele vale por 15 minutos.
+            </Text>
 
             <View style={styles.inputWrapperCodigo}>
               <TextInput

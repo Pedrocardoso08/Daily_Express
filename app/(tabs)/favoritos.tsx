@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect} from 'expo-router';
 import { estiloLogo, logo, origemImagem } from '../../lib/imagens';
 import { useState, useCallback } from 'react';
-import { loja, alternarFavorito, ProdutoFavorito} from '../../lib/loja';
+import { loja, alternarFavorito, buscarFavoritos, ProdutoFavorito } from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
 
 export default function FavoritosScreen() {
@@ -12,9 +12,10 @@ export default function FavoritosScreen() {
   const router = useRouter();
   const [favoritos, setFavoritos] = useState<ProdutoFavorito[]>([]);
 
+  // Toda vez que a aba aparece, lê os favoritos do banco
   useFocusEffect(
     useCallback(() => {
-      setFavoritos([...loja.favoritos]);
+      buscarFavoritos().then((lista) => setFavoritos(lista));
     }, [])
   );
 

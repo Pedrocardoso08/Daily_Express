@@ -52,7 +52,7 @@ export default function FaleConoscoScreen() {
               <Ionicons name="call" size={24} color={cor('#4A3525')} />
               <Text style={styles.contactLabel}>Telefone</Text>
             </View>
-            <Text style={styles.contactValue}>(**) ****-****</Text>
+            <Text style={styles.contactValue}>(48) 3433-2026</Text>
           </View>
 
           <View style={styles.contactItem}>
@@ -60,7 +60,7 @@ export default function FaleConoscoScreen() {
               <Ionicons name="mail" size={24} color={cor('#4A3525')} />
               <Text style={styles.contactLabel}>Email</Text>
             </View>
-            <Text style={styles.contactValue}>contato@cafeteria.com</Text>
+            <Text style={styles.contactValue}>contato@dailyexpress.com.br</Text>
           </View>
 
           <View style={[styles.contactItem, styles.lastItem]}>
@@ -68,7 +68,7 @@ export default function FaleConoscoScreen() {
               <Ionicons name="logo-whatsapp" size={24} color={cor('#4A3525')} />
               <Text style={styles.contactLabel}>Whatsapp</Text>
             </View>
-            <Text style={styles.contactValue}>(**) ****-****</Text>
+            <Text style={styles.contactValue}>(48) 99876-2026</Text>
           </View>
         </View>
       </View>

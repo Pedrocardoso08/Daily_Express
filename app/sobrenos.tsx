@@ -88,11 +88,11 @@ export default function SobreNosScreen() {
           <View style={styles.sectionBody}>
             <View style={styles.socialRow}>
               <Ionicons name="logo-instagram" size={22} color={cor('#4A3525')} />
-              <Text style={styles.socialText}>**************</Text>
+              <Text style={styles.socialText}>@dailyexpress.cafe</Text>
             </View>
             <View style={styles.socialRow}>
               <Ionicons name="logo-tiktok" size={22} color={cor('#4A3525')} />
-              <Text style={styles.socialText}>**************</Text>
+              <Text style={styles.socialText}>@dailyexpress.cafe</Text>
             </View>
           </View>
         </View>

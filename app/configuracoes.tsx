@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Text,
   View,
@@ -9,7 +9,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { estiloLogo, logo } from '../lib/imagens';
-import { loja } from '../lib/loja';
+import { enviar } from '../lib/api';
+import { buscarPerfil, idUsuario } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 type Idioma = 'pt' | 'en' | 'es';
@@ -40,21 +41,50 @@ export default function ConfiguracoesScreen() {
 
   const [localizacaoAtiva, setLocalizacaoAtiva] = useState(true);
   const [notificacoesAtivas, setNotificacoesAtivas] = useState(true);
-  const [volume, setVolume] = useState(loja.volume);
+  const [volume, setVolume] = useState(70);
   const [larguraBarra, setLarguraBarra] = useState(0);
 
-  const [idioma, setIdioma] = useState<Idioma>(loja.idioma);
+  const [idioma, setIdioma] = useState<Idioma>('pt');
   const [listaIdiomasAberta, setListaIdiomasAberta] = useState(false);
   const textos = TEXTOS[idioma];
 
-  function mudarVolume(novoVolume: number) {
-    const valor = Math.round(Math.max(0, Math.min(100, novoVolume)));
-    loja.volume = valor;
-    setVolume(valor);
+  // Lê as configurações salvas no banco quando a tela abre
+  useEffect(() => {
+    buscarPerfil().then((perfil) => {
+      // Sem a linha de preferências no banco, fica tudo no padrão
+      if (!perfil || perfil.idioma === null) {
+        return;
+      }
+      setLocalizacaoAtiva(perfil.localizacao_ativa == 1);
+      setNotificacoesAtivas(perfil.notificacoes_ativas == 1);
+      setVolume(perfil.volume);
+      setIdioma(perfil.idioma);
+    });
+  }, []);
+
+  // Salva no banco só o que mudou, ex.: salvar({ idioma: 'en' })
+  function salvar(preferencias: any) {
+    enviar('/preferencias', { usuario: idUsuario(), preferencias: preferencias }).catch(() => {});
   }
 
-  const diminuirVolume = () => mudarVolume(volume - 10);
-  const aumentarVolume = () => mudarVolume(volume + 10);
+  function mudarVolume(novoVolume: number) {
+    const valor = Math.round(Math.max(0, Math.min(100, novoVolume)));
+    setVolume(valor);
+    return valor;
+  }
+
+  const diminuirVolume = () => salvar({ volume: mudarVolume(volume - 10) });
+  const aumentarVolume = () => salvar({ volume: mudarVolume(volume + 10) });
+
+  function alternarLocalizacao() {
+    setLocalizacaoAtiva(!localizacaoAtiva);
+    salvar({ localizacao_ativa: !localizacaoAtiva });
+  }
+
+  function alternarNotificacoes() {
+    setNotificacoesAtivas(!notificacoesAtivas);
+    salvar({ notificacoes_ativas: !notificacoesAtivas });
+  }
 
   // Converte a posição do dedo na barra em porcentagem
   function tocarNaBarra(posicaoX: number) {
@@ -64,9 +94,9 @@ export default function ConfiguracoesScreen() {
   }
 
   function escolherIdioma(novoIdioma: Idioma) {
-    loja.idioma = novoIdioma;
     setIdioma(novoIdioma);
     setListaIdiomasAberta(false);
+    salvar({ idioma: novoIdioma });
   }
 
   const nomeIdioma = IDIOMAS.find((item) => item.id === idioma)?.nome;
@@ -161,7 +191,7 @@ export default function ConfiguracoesScreen() {
           </View>
 
           <View style={styles.switchRow}>
-            {renderSwitch(localizacaoAtiva, () => setLocalizacaoAtiva(!localizacaoAtiva))}
+            {renderSwitch(localizacaoAtiva, alternarLocalizacao)}
           </View>
         </View>
 
@@ -172,7 +202,7 @@ export default function ConfiguracoesScreen() {
           </View>
 
           <View style={styles.switchRow}>
-            {renderSwitch(notificacoesAtivas, () => setNotificacoesAtivas(!notificacoesAtivas))}
+            {renderSwitch(notificacoesAtivas, alternarNotificacoes)}
           </View>
         </View>
 
@@ -195,6 +225,7 @@ export default function ConfiguracoesScreen() {
               onMoveShouldSetResponder={() => true}
               onResponderGrant={(e) => tocarNaBarra(e.nativeEvent.locationX)}
               onResponderMove={(e) => tocarNaBarra(e.nativeEvent.locationX)}
+              onResponderRelease={() => salvar({ volume: volume })}
             >
               <View style={styles.sliderTrack} pointerEvents="none">
                 <View style={[styles.sliderFill, { width: `${volume}%` }]} />

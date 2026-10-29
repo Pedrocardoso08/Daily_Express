@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Text,
   TextInput,
@@ -11,7 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { estiloLogo, logo } from '../lib/imagens';
-import { Cartao, loja } from '../lib/loja';
+import { enviar } from '../lib/api';
+import { buscarCartoes, Cartao, idUsuario, loja } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function CartoesScreen() {
@@ -26,7 +27,7 @@ export default function CartoesScreen() {
     }
   }
 
-  const [cartoes, setCartoes] = useState(loja.cartoes);
+  const [cartoes, setCartoes] = useState([...loja.cartoes]);
 
   // Formulário de novo cartão
   const [formAberto, setFormAberto] = useState(false);
@@ -35,13 +36,16 @@ export default function CartoesScreen() {
   const [validade, setValidade] = useState('');
   const [erro, setErro] = useState('');
 
-  function atualizarCartoes(novaLista: Cartao[]) {
-    loja.cartoes = novaLista;
-    setCartoes(novaLista);
-  }
+  // Lê os cartões do banco quando a tela abre
+  useEffect(() => {
+    buscarCartoes().then((lista) => setCartoes(lista));
+  }, []);
 
   const removerCartao = (id: string) => {
-    atualizarCartoes(cartoes.filter((item) => item.id !== id));
+    enviar('/removerCartao', { id: id })
+      .then(() => buscarCartoes())
+      .then((lista) => setCartoes(lista))
+      .catch(() => {});
   };
 
   function fecharFormulario() {
@@ -60,17 +64,26 @@ export default function CartoesScreen() {
       return;
     }
 
-    // Só os 4 últimos dígitos ficam salvos
+    // Só os 4 últimos dígitos vão para o banco (nunca o número inteiro)
     const finalCartao = somenteNumeros.slice(-4);
-    const novoCartao: Cartao = {
-      id: String(Date.now()),
-      nome: `${nomeCartao.trim()} final ${finalCartao}`,
-      numero: `**** **** **** ${finalCartao}`,
-      validade: `Validade ${validade}`,
-    };
 
-    atualizarCartoes([...cartoes, novoCartao]);
-    fecharFormulario();
+    enviar('/cartao', {
+      usuario: idUsuario(),
+      nome: nomeCartao.trim() + ' final ' + finalCartao,
+      ultimosDigitos: finalCartao,
+      validade: validade,
+    })
+      .then((dados) => {
+        if (dados.error) {
+          setErro(dados.error);
+          return;
+        }
+        fecharFormulario();
+        buscarCartoes().then((lista) => setCartoes(lista));
+      })
+      .catch(() => {
+        setErro('Não foi possível conectar ao servidor.');
+      });
   }
 
   const renderHeader = () => (

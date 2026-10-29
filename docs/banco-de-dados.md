@@ -1,6 +1,8 @@
 # Banco de dados do Daily Coffee
 
-Hoje o app guarda os dados no objeto `loja` de [lib/loja.ts](../lib/loja.ts). Por isso, tudo volta ao início quando o app fecha. O banco vai guardar esses dados de verdade, separados por usuário.
+O app lê e grava os dados do cliente no banco pelo back-end da pasta [back/](../back/): pedidos, endereços, favoritos, cartões, preferências, pontos de fidelidade, notificações e recuperação de senha. Só o carrinho continua na memória (objeto `loja` de [lib/loja.ts](../lib/loja.ts)) até a compra ser finalizada.
+
+As rotas do cliente ficam em [back/database/ClienteBD.js](../back/database/ClienteBD.js) e recebem o id do usuário logado (ex.: `GET /pedidos?usuario=1`). As de senha ficam em [back/database/UsuarioBD.js](../back/database/UsuarioBD.js). Como não há servidor de e-mail, o código de recuperação de senha aparece na própria tela.
 
 O nível do banco segue a referência da turma (`referencia banco e back/projetoLoginEMI`): MySQL simples, com `CREATE TABLE`, `VARCHAR`, `INT`, `DATE` e chaves estrangeiras. A senha fica criptografada com **bcrypt**, como no `UsuarioBD.js` da referência. O back-end fica na pasta [back/](../back/).
 
@@ -14,7 +16,7 @@ O banco segue o princípio da **exclusão lógica** (em inglês, *soft delete*):
 - Listar no app = `SELECT ... WHERE ativo = TRUE`.
 - O registro continua no banco: o histórico, os pedidos antigos e os relatórios não perdem nada.
 
-Tabelas com `ativo`: produtos, cupons, enderecos, cartoes, favoritos e carrinho_itens. Hoje o back-end já faz isso em produtos e cupons ([back/database/LojaBD.js](../back/database/LojaBD.js)). Se um cupom removido for cadastrado de novo com o mesmo código, ele é reativado com os dados novos.
+Tabelas com `ativo`: produtos, cupons, enderecos, cartoes, favoritos e carrinho_itens. O back-end faz isso em produtos e cupons ([back/database/LojaBD.js](../back/database/LojaBD.js)) e em endereços, cartões e favoritos ([back/database/ClienteBD.js](../back/database/ClienteBD.js)). Se um cupom removido for cadastrado de novo com o mesmo código, ele é reativado com os dados novos.
 
 ## Tabelas, campos e onde cada uma age
 

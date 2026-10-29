@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { API } from '../lib/api';
 import { estiloLogo, logo } from '../lib/imagens';
-import { dataDeHoje, loja } from '../lib/loja';
+import { dataDeHoje, salvarUsuario } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function LoginScreen() {
@@ -45,12 +45,13 @@ export default function LoginScreen() {
           return;
         }
 
-        loja.usuario = {
+        salvarUsuario({
           id: dados.usuario.id,
           nome: dados.usuario.nome,
           email: dados.usuario.email,
+          foto: dados.usuario.foto ? dados.usuario.foto : '',
           logadoEm: dataDeHoje(),
-        };
+        });
         router.replace('/menu');
       })
       .catch(() => {

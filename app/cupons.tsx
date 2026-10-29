@@ -72,6 +72,9 @@ export default function CuponsScreen() {
       <Text style={styles.couponCode}>{item.codigo}</Text>
       <Text style={styles.couponOffer}>{item.titulo}</Text>
       <Text style={styles.couponDetails}>{item.descricao}</Text>
+      {item.validade !== '' && (
+        <Text style={styles.couponDetails}>Válido até {item.validade}</Text>
+      )}
 
       <TouchableOpacity
         style={styles.useButton}

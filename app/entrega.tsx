@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Text, 
   TextInput, 
@@ -10,7 +10,8 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { mapa } from '../lib/imagens';
-import { Endereco, loja, textoEndereco } from '../lib/loja';
+import { enviar } from '../lib/api';
+import { buscarEnderecos, Endereco, idUsuario, loja, textoEndereco } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
  
 export default function EntregaScreen() {
@@ -35,8 +36,14 @@ export default function EntregaScreen() {
   const [tipoLocal, setTipoLocal] = useState<'Casa' | 'Empresa'>('Casa');
 
   // Lista de endereços salvos (abre ao tocar em "Endereço....")
+  const [enderecos, setEnderecos] = useState([...loja.enderecos]);
   const [listaAberta, setListaAberta] = useState(false);
   const [erro, setErro] = useState('');
+
+  // Lê os endereços salvos no banco quando a tela abre
+  useEffect(() => {
+    buscarEnderecos().then((lista) => setEnderecos(lista));
+  }, []);
 
   // Preenche o formulário com um endereço salvo
   function escolherEndereco(endereco: Endereco) {
@@ -64,12 +71,12 @@ export default function EntregaScreen() {
       cidade: cidade.trim(),
     };
 
-    // Se for um endereço novo, ele fica salvo na tela de Endereços
-    const jaSalvo = loja.enderecos.some(
+    // Se for um endereço novo, ele é salvo no banco e aparece na tela de Endereços
+    const jaSalvo = enderecos.some(
       (item) => textoEndereco(item) === textoEndereco(endereco)
     );
     if (!jaSalvo) {
-      loja.enderecos.push(endereco);
+      enviar('/endereco', { ...endereco, usuario: idUsuario() }).catch(() => {});
     }
 
     loja.enderecoEntrega = textoEndereco(endereco);
@@ -110,10 +117,10 @@ export default function EntregaScreen() {
 
         {listaAberta && (
           <View style={styles.savedList}>
-            {loja.enderecos.length === 0 && (
+            {enderecos.length === 0 && (
               <Text style={styles.savedEmpty}>Nenhum endereço salvo.</Text>
             )}
-            {loja.enderecos.map((endereco) => (
+            {enderecos.map((endereco) => (
               <TouchableOpacity
                 key={endereco.id}
                 style={styles.savedItem}

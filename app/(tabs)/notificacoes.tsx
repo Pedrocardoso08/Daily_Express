@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,46 +9,20 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { estiloLogo, fotoPerfil, logo } from '../../lib/imagens';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { buscar, enviar } from '../../lib/api';
+import { estiloLogo, fotoDoUsuario, logo } from '../../lib/imagens';
+import { idUsuario, sair } from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
 
-type NomeIcone = React.ComponentProps<typeof Ionicons>['name'];
-
+// Cada notificação vem do banco (tabelas notificacoes e usuario_notificacoes)
 type Notificacao = {
-  id: string;
-  icone: NomeIcone;
+  id: number;
+  icone: any;
   titulo: string;
   descricao: string;
+  lida: boolean;
 };
-
-// --- DADOS DAS NOTIFICAÇÕES ---
-const NOTIFICACOES_INICIAIS: Notificacao[] = [
-  {
-    id: '1',
-    icone: 'cafe',
-    titulo: 'Temos um novo café!',
-    descricao: 'Venha experimentar nosso novo café, feito com grãos selecionados e de maneira sustentável!',
-  },
-  {
-    id: '2',
-    icone: 'gift',
-    titulo: 'Confira a semana de promoções!',
-    descricao: 'Aproveite para vir tomar café na Daily Express na semana de promoções.',
-  },
-  {
-    id: '3',
-    icone: 'gift',
-    titulo: 'Aproveite o dia do cliente!',
-    descricao: 'Aproveite o dia do cliente e economize comendo mais do que gosta.',
-  },
-  {
-    id: '4',
-    icone: 'pricetag',
-    titulo: 'Você ganhou cupons!',
-    descricao: 'Feliz Aniversário! Você ganhou cupons de promoção!',
-  },
-];
 
 export default function NotificacoesScreen() {
   const { escuro: modoEscuro, alternarTema } = useTema();
@@ -56,11 +30,30 @@ export default function NotificacoesScreen() {
 
   // Estados de controle da gaveta lateral, tema e lista
   const [menuAberto, setMenuAberto] = useState(false);
-  const [notificacoes, setNotificacoes] = useState(NOTIFICACOES_INICIAIS);
-  const [todasLidas, setTodasLidas] = useState(false);
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+
+  // Toda vez que a aba aparece, lê as notificações do banco
+  useFocusEffect(
+    useCallback(() => {
+      buscar('/notificacoes?usuario=' + idUsuario())
+        .then((lista) => {
+          if (Array.isArray(lista)) {
+            setNotificacoes(lista);
+          }
+        })
+        .catch(() => {});
+    }, [])
+  );
+
+  // Fica "Tudo lido" quando nenhuma notificação está sem ler
+  const todasLidas = notificacoes.length > 0 && notificacoes.every((item) => item.lida);
 
   const marcarComoLidas = () => {
-    setTodasLidas(true);
+    enviar('/lerNotificacoes', { usuario: idUsuario() })
+      .then(() => {
+        setNotificacoes(notificacoes.map((item) => ({ ...item, lida: true })));
+      })
+      .catch(() => {});
   };
 
   function irPara(rota: '/historicoPedidos' | '/cupons' | '/endereco' | '/ajuda' | '/faleconosco' | '/sobrenos') {
@@ -86,7 +79,7 @@ export default function NotificacoesScreen() {
             />
 
             <Image
-              source={fotoPerfil}
+              source={fotoDoUsuario()}
               style={styles.avatar}
             />
           </View>
@@ -193,6 +186,18 @@ export default function NotificacoesScreen() {
                 <Ionicons name="information-circle-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Sobre nós</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
+                  sair();
+                  router.replace('/login');
+                }}
+              >
+                <Ionicons name="exit-outline" size={22} color={cor('#4A3525')} />
+                <Text style={styles.sidebarItemText}>Sair</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -201,7 +206,7 @@ export default function NotificacoesScreen() {
       {/* 2. LISTA DE NOTIFICAÇÕES */}
       <FlatList
         data={notificacoes}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         ListHeaderComponent={renderHeader}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
