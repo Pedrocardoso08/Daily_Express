@@ -1,0 +1,17 @@
+{
+  "name": "daily-express-back",
+  "version": "1.0.0",
+  "description": "Back-end do app Daily Coffee (login e cadastro)",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "mysql": "^2.18.1"
+  }
+}

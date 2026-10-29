@@ -1,97 +1,93 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import { Platform, StyleSheet, Text, View } from "react-native";
-import InputBusca from "../components/inputBusca";
+import { View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
+import { cor, criarEstilos, fundo, useTema } from '../../lib/tema';
 
 export default function TabLayout() {
+  useTema();
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        headerTitleAlign: "left",
-        headerTitle: (props) => (
-          <View style={styles.headerContainer}>
-            <Text style={styles.headerTitleText}>{props.children}</Text>
-            <View style={styles.inputContainer}>
-              <InputBusca placeholder="Buscar..." />
-            </View>
-          </View>
-        ),
-        headerStyle: {
-          backgroundColor: "rgb(93, 0, 7)",
-          height: Platform.OS === "ios" ? 100 : 75,
-          elevation: 0,
-          shadowOpacity: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: "rgb(37, 6, 6)",
-        },
-        tabBarActiveTintColor: "#007AFF",
-        tabBarInactiveTintColor: "#8E8E93",
-        tabBarStyle: {
-          backgroundColor: "rgb(9, 9, 94)",
-          borderTopWidth: 1,
-          borderTopColor: "#F0F0F0",
-          height: Platform.OS === "ios" ? 88 : 64,
-          paddingBottom: Platform.OS === "ios" ? 30 : 80,
-          paddingTop: 10,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "500",
-        },
+        headerShown: false,
+        tabBarShowLabel: false,
+        tabBarActiveTintColor: '#EAD1A8',
+        tabBarInactiveTintColor: '#FFFFFF',
+        tabBarStyle: styles.barra,
+        sceneStyle: { backgroundColor: fundo('#EAD1A8') },
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="menu"
         options={{
-          title: "Projeto integrador!",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "link" : "eye"}
-              size={24}
-              color={color}
-            />
+          title: 'Início',
+          tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="perfil"
+        options={{
+          title: 'Perfil',
+          tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="carrinho"
+        options={{
+          title: 'Carrinho',
+          tabBarStyle: { display: 'none' },
+          tabBarIcon: () => (
+            <View style={styles.botaoCentro}>
+              <Ionicons name="cart" size={28} color={cor('#4A3525')} />
+            </View>
           ),
         }}
       />
-
-      {/* Rota de Busca dentro das abas (oculta do menu inferior com href: null) */}
       <Tabs.Screen
-        name="rotas/busca/[query]"
+        name="favoritos"
         options={{
-          title: "Busca",
-          href: null,
+          title: 'Favoritos',
+          tabBarIcon: ({ color }) => <Ionicons name="heart" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="notificacoes"
+        options={{
+          title: 'Notificações',
+          tabBarIcon: ({ color }) => <Ionicons name="notifications" size={24} color={color} />,
         }}
       />
 
-      {/* Rota de Produtos dentro das abas (oculta do menu inferior com href: null) */}
-      <Tabs.Screen
-        name="rotas/produtos/[id]"
-        options={{
-          title: "Produto",
-          href: null,
-        }}
-      />
+      {/* Rotas que existem na pasta mas não aparecem na barra */}
+      <Tabs.Screen name="index" options={{ href: null }} />
     </Tabs>
   );
 }
 
-const styles = StyleSheet.create({
-  headerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%",
-    paddingRight: 16,
-    gap: 12,
+const styles = criarEstilos({
+  barra: {
+    position: 'absolute',
+    bottom: 15,
+    marginHorizontal: 20,
+    height: 60,
+    paddingBottom: 0,
+    borderRadius: 30,
+    borderTopWidth: 0,
+    backgroundColor: '#4A3525',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
   },
-  headerTitleText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-    flexShrink: 1,
-  },
-  inputContainer: {
-    flex: 1,
+  botaoCentro: {
+    backgroundColor: '#C9A075',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#EAD1A8',
+    marginTop: -30,
   },
 });
