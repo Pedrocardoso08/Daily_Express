@@ -59,8 +59,33 @@ export default function CartoesScreen() {
   function salvarCartao() {
     const somenteNumeros = numeroCartao.replace(/\D/g, '');
 
-    if (nomeCartao.trim() === '' || somenteNumeros.length < 13 || validade.length !== 5) {
-      setErro('Preencha o nome, o número completo e a validade (MM/AA).');
+    if (nomeCartao.trim() === '') {
+      setErro('Digite o nome do cartão.');
+      return;
+    }
+
+    if (somenteNumeros.length !== 16) {
+      setErro('O número do cartão precisa ter 16 dígitos.');
+      return;
+    }
+
+    if (validade.length !== 5 || validade[2] !== '/') {
+      setErro('Digite a validade no formato MM/AA.');
+      return;
+    }
+
+    const mes = Number(validade.slice(0, 2));
+    const ano = Number(validade.slice(3, 5));
+    if (isNaN(mes) || isNaN(ano) || mes < 1 || mes > 12) {
+      setErro('Mês da validade inválido (01 a 12).');
+      return;
+    }
+
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear() % 100;
+    const mesAtual = hoje.getMonth() + 1;
+    if (ano < anoAtual || (ano === anoAtual && mes < mesAtual)) {
+      setErro('Este cartão está vencido.');
       return;
     }
 
@@ -168,7 +193,11 @@ export default function CartoesScreen() {
               keyboardType="numeric"
               maxLength={5}
               value={validade}
-              onChangeText={setValidade}
+              onChangeText={(texto) => {
+                // Coloca a barra sozinho: "1226" vira "12/26"
+                const numeros = texto.replace(/\D/g, '');
+                setValidade(numeros.length > 2 ? numeros.slice(0, 2) + '/' + numeros.slice(2, 4) : numeros);
+              }}
             />
 
             {erro !== '' && <Text style={styles.erroText}>{erro}</Text>}

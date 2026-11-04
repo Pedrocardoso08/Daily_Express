@@ -39,6 +39,10 @@ class LojaBD{
             return callback({'error':'Preencha nome, descrição, categoria e preço.'})
         }
 
+        if(precoAntigo && Number(precoAntigo) <= Number(preco)){
+            return callback({'error':'O preço anterior precisa ser maior que o preço atual.'})
+        }
+
         const connection = LojaBD.connect()
 
         var sqlCategoria = 'select id from categorias where nome = ?'
@@ -103,13 +107,21 @@ class LojaBD{
         })
     }
 
-    // Lista: tela app/cupons.tsx e o botão Aplicar do carrinho
-    static getCupons(callback){
+    // Lista: tela app/cupons.tsx e o botão Aplicar do carrinho.
+    // Com usuario: só os cupons dentro da validade que esse cliente ainda não usou.
+    // Sem usuario (tela de funcionários): todos os cupons ativos.
+    static getCupons(usuario, callback){
         const connection = LojaBD.connect()
 
-        var sql = 'select id, codigo, titulo, descricao, tipo, valor, date_format(validade, "%d/%m/%Y") as validade from cupons where ativo = true order by id desc'
+        var sql = 'select id, codigo, titulo, descricao, tipo, valor, date_format(validade, "%d/%m/%Y") as validade from cupons where ativo = true'
 
-        connection.query(sql, (error, results)=>{
+        if(usuario){
+            sql += ' and (validade is null or validade >= curdate()) and id not in (select cupom_id from usuario_cupons where usuario_id = ? and usado = true)'
+        }
+
+        sql += ' order by id desc'
+
+        connection.query(sql, usuario, (error, results)=>{
             connection.end()
 
             if(error){

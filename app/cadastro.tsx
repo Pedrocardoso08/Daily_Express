@@ -33,6 +33,13 @@ export default function CadastroScreen() {
       return;
     }
 
+    // Email precisa ter o formato nome@exemplo.com
+    const partesEmail = email.trim().split('@');
+    if (partesEmail.length != 2 || partesEmail[0] == '' || !partesEmail[1].includes('.')) {
+      setErro('Digite um email válido, ex.: nome@exemplo.com');
+      return;
+    }
+
     if (senha != confirmarSenha) {
       setErro('As senhas não conferem.');
       setSenha('');
@@ -107,7 +114,7 @@ export default function CadastroScreen() {
           <Ionicons name="mail" size={20} color={cor('#4A3525')} />
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="nome@exemplo.com"
             placeholderTextColor={cor('#8C837A')}
             value={email}
             onChangeText={setEmail}

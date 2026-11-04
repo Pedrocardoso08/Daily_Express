@@ -1,11 +1,9 @@
 -- =====================================================
--- BANCO DE DADOS DO APP DAILY COFFEE (MySQL)
+-- BANCO DE DADOS DO APP DAILY EXPRESS (MySQL)
 -- Rodar o arquivo inteiro no MySQL Workbench ou no phpMyAdmin (XAMPP).
 -- ATENÇÃO: se o banco daily_express já existir, ele é apagado e criado de novo.
--- Para só atualizar um banco que já existe, use atualizacao_exclusao_logica.sql.
+-- Para só atualizar um banco que já existe, use atualizacao.sql.
 --
--- EXCLUSÃO LÓGICA: nenhum dado é apagado com DELETE. Quando algo é removido
--- no app, a coluna ativo vira FALSE e o registro só deixa de aparecer.
 -- =====================================================
 
 DROP DATABASE IF EXISTS daily_express;
@@ -285,22 +283,22 @@ INSERT INTO categorias (id, nome, icone) VALUES
     (4, 'Doces', 'ice-cream');
 
 INSERT INTO produtos (id, categoria_id, nome, descricao_curta, descricao_completa, preco, preco_antigo, nota, imagem) VALUES
-    (1, 1, 'Capuccino clássico', 'Leite vaporizado e expresso cremoso',
+    (1, 2, 'Capuccino clássico', 'Leite vaporizado e expresso cremoso',
      'O cappuccino clássico italiano é uma bebida equilibrada, famosa por sua textura aveludada. Na receita tradicional, ele tem 1/3 de café expresso, 1/3 de leite vaporizado e 1/3 de espuma de leite.',
      13.90, 18.90, 4.9, 'https://images.unsplash.com/photo-1534778101976-62847782c213?q=80&w=400&auto=format&fit=crop'),
-    (2, 1, 'Latte + Cheesecake', 'Latte suave com fatia de frutas vermelhas', NULL,
+    (2, 4, 'Latte + Cheesecake', 'Latte suave com fatia de frutas vermelhas', NULL,
      28.90, 35.80, 4.7, 'https://images.unsplash.com/photo-1533134242443-d4fd01530ae1?q=80&w=400&auto=format&fit=crop'),
-    (3, 1, 'Combo Lanche Leve', 'Sanduíche natural e chá gelado de pêssego', NULL,
+    (3, 3, 'Combo Lanche Leve', 'Sanduíche natural e chá gelado de pêssego', NULL,
      25.90, 30.80, 4.6, 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?q=80&w=400&auto=format&fit=crop'),
-    (4, 1, 'Mocha Especial', 'Leite vaporizado, calda de chocolate belga', NULL,
+    (4, 2, 'Mocha Especial', 'Leite vaporizado, calda de chocolate belga', NULL,
      12.90, 15.90, 4.7, 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?q=80&w=400&auto=format&fit=crop'),
-    (5, 1, 'Combo Choc. Quente', 'Chocolate quente cremoso e biscoitos', NULL,
+    (5, 2, 'Combo Choc. Quente', 'Chocolate quente cremoso e biscoitos', NULL,
      29.90, 35.80, 4.9, 'https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?q=80&w=400&auto=format&fit=crop'),
-    (6, 1, 'Croissant Presunto', 'Massa folhada recheada com queijo derretido', NULL,
+    (6, 3, 'Croissant Presunto', 'Massa folhada recheada com queijo derretido', NULL,
      14.90, 17.90, 4.8, 'https://images.unsplash.com/photo-1550617931-e17a7b70dce2?q=80&w=400&auto=format&fit=crop'),
-    (7, 1, 'Espresso + Cookie', 'Espresso duplo e cookie com gotas de cacau', NULL,
+    (7, 4, 'Espresso + Cookie', 'Espresso duplo e cookie com gotas de cacau', NULL,
      16.50, 22.00, 4.8, 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=400&auto=format&fit=crop'),
-    (8, 1, 'Frappuccino Caramelo', 'Café batido gelado com chantilly e calda', NULL,
+    (8, 2, 'Frappuccino Caramelo', 'Café batido gelado com chantilly e calda', NULL,
      19.90, 24.90, 4.9, 'https://images.unsplash.com/photo-1577968897966-3d4325b36b61?q=80&w=400&auto=format&fit=crop'),
     (9, 4, 'Cheesecake', 'Sobremesa gelada clássica', NULL,
      11.90, NULL, 4.8, 'https://images.unsplash.com/photo-1533134242443-d4fd01530ae1?q=80&w=400&auto=format&fit=crop');

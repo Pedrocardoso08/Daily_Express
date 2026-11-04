@@ -6,7 +6,7 @@ As rotas do cliente ficam em [back/database/ClienteBD.js](../back/database/Clien
 
 O nível do banco segue a referência da turma (`referencia banco e back/projetoLoginEMI`): MySQL simples, com `CREATE TABLE`, `VARCHAR`, `INT`, `DATE` e chaves estrangeiras. A senha fica criptografada com **bcrypt**, como no `UsuarioBD.js` da referência. O back-end fica na pasta [back/](../back/).
 
-O script que cria tudo está em [database/daily_express.sql](../database/daily_express.sql). Ele apaga o banco `daily_express` se ele já existir e cria de novo, já com dados de exemplo. Para atualizar um banco que já existe sem perder os dados, use [database/atualizacao_exclusao_logica.sql](../database/atualizacao_exclusao_logica.sql).
+O script que cria tudo está em [database/daily_express.sql](../database/daily_express.sql). Ele apaga o banco `daily_express` se ele já existir e cria de novo, já com dados de exemplo. Para atualizar um banco que já existe sem perder os dados, use [database/atualizacao.sql](../database/atualizacao.sql).
 
 ## Exclusão lógica (nada é apagado)
 

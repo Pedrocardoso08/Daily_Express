@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Text, 
   TextInput,
@@ -9,7 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { enviar } from '../lib/api';
-import { formatarPreco, idUsuario, loja } from '../lib/loja';
+import { buscarCartoes, Cartao, formatarPreco, idUsuario, loja } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
  
 export default function PagamentoScreen() {
@@ -24,6 +24,21 @@ export default function PagamentoScreen() {
   const [numeroCartao, setNumeroCartao] = useState('');
   const [validade, setValidade] = useState('');
   const [cvv, setCvv] = useState('');
+
+  // Cartões salvos na tela Cartões. Com um escolhido, não precisa digitar o cartão.
+  const [cartoes, setCartoes] = useState<Cartao[]>([...loja.cartoes]);
+  const [listaCartoesAberta, setListaCartoesAberta] = useState(false);
+  const [cartaoEscolhido, setCartaoEscolhido] = useState<Cartao | null>(null);
+
+  useEffect(() => {
+    buscarCartoes().then((lista) => setCartoes(lista));
+  }, []);
+
+  function escolherCartao(cartao: Cartao | null) {
+    setCartaoEscolhido(cartao);
+    setListaCartoesAberta(false);
+    setErro('');
+  }
  
   function voltar() {
     if (router.canGoBack()) {
@@ -44,7 +59,7 @@ export default function PagamentoScreen() {
       return;
     }
 
-    if (exibirFormularioCartao && (nomeTitular === '' || numeroCartao === '' || validade === '' || cvv === '')) {
+    if (exibirFormularioCartao && !cartaoEscolhido && (nomeTitular === '' || numeroCartao === '' || validade === '' || cvv === '')) {
       setErro('Preencha os dados do cartão.');
       return;
     }
@@ -186,12 +201,44 @@ export default function PagamentoScreen() {
               {/* Linha tracejada superior */}
 <View style={styles.dashedLine} />
  
-              {/* Seletor: Adicionar cartão existente */}
-<TouchableOpacity style={styles.inputDropdown} activeOpacity={0.8}>
-<Text style={styles.dropdownPlaceholder}>Adicionar cartão existente</Text>
-<Ionicons name="chevron-down" size={20} color={cor('#4A3525')} />
+              {/* Seletor: usar um cartão salvo */}
+<TouchableOpacity
+                style={styles.inputDropdown}
+                activeOpacity={0.8}
+                onPress={() => setListaCartoesAberta(!listaCartoesAberta)}
+              >
+<Text style={cartaoEscolhido ? styles.dropdownEscolhido : styles.dropdownPlaceholder}>
+                  {cartaoEscolhido ? cartaoEscolhido.nome : 'Usar cartão salvo'}
+</Text>
+<Ionicons name={listaCartoesAberta ? 'chevron-up' : 'chevron-down'} size={20} color={cor('#4A3525')} />
 </TouchableOpacity>
+
+              {listaCartoesAberta && (
+                <View style={styles.savedList}>
+                  {cartoes.length === 0 && (
+                    <Text style={styles.savedEmpty}>Nenhum cartão salvo.</Text>
+                  )}
+                  {cartoes.map((cartao) => (
+                    <TouchableOpacity
+                      key={cartao.id}
+                      style={styles.savedItem}
+                      onPress={() => escolherCartao(cartao)}
+                    >
+                      <Ionicons name="card" size={18} color={cor('#4A3525')} />
+                      <Text style={styles.savedText}>{cartao.nome}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {cartaoEscolhido && (
+                    <TouchableOpacity style={styles.savedItem} onPress={() => escolherCartao(null)}>
+                      <Ionicons name="create-outline" size={18} color={cor('#4A3525')} />
+                      <Text style={styles.savedText}>Digitar outro cartão</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
  
+              {!cartaoEscolhido && (
+<>
               {/* Input: Nome do titular */}
 <View style={styles.inputPill}>
 <TextInput
@@ -244,6 +291,9 @@ export default function PagamentoScreen() {
 </View>
 </View>
  
+</>
+              )}
+
               {/* Linha tracejada inferior */}
 <View style={styles.dashedLine} />
 </View>
@@ -462,6 +512,34 @@ const styles = criarEstilos({
     fontSize: 12,
     color: '#A08970',
     fontWeight: '500',
+  },
+  dropdownEscolhido: {
+    fontSize: 12,
+    color: '#2A1F17',
+    fontWeight: '600',
+  },
+  savedList: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 4,
+  },
+  savedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  savedText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#2A1F17',
+  },
+  savedEmpty: {
+    fontSize: 12,
+    color: '#8C837A',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   inputPill: {
     backgroundColor: '#FFFFFF',

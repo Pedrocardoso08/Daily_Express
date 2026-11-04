@@ -106,16 +106,27 @@ export function formatarPreco(valor: number) {
 // Código da área de funcionários. Vale só no app, enquanto ele estiver aberto.
 export const CODIGO_FUNCIONARIO = 'DAILY';
 
+function acharCupom(codigo: string) {
+  return loja.cupons.find((item) => item.codigo.toUpperCase() === codigo.trim().toUpperCase());
+}
+
 // Retorna o desconto em reais, ou -1 se o cupom não existir
 export function calcularDesconto(codigo: string, subtotal: number) {
-  const cupom = loja.cupons.find(
-    (item) => item.codigo.toUpperCase() === codigo.trim().toUpperCase()
-  );
+  const cupom = acharCupom(codigo);
   if (!cupom) {
     return -1;
   }
   const desconto = cupom.tipo === 'porcentagem' ? (subtotal * cupom.valor) / 100 : cupom.valor;
   return Math.min(desconto, subtotal);
+}
+
+// Cupom que fala de entrega (ex.: FRETEGRÁTIS) só vale quando o pedido é para levar
+export function cupomSoDeEntrega(codigo: string) {
+  const cupom = acharCupom(codigo);
+  if (!cupom) {
+    return false;
+  }
+  return (cupom.titulo + ' ' + cupom.descricao).toLowerCase().includes('entrega');
 }
 
 // --- LOGIN SALVO ---
@@ -156,14 +167,14 @@ export const loja = {
 
   // Cardápio e cupons de reserva, usados só se o servidor estiver desligado
   produtos: [
-    { id: '1', nome: 'Capuccino clássico', desc: 'Leite vaporizado e expresso cremoso', nota: '4.9', precoAntigo: '18,90', precoNovo: '13,90', categoria: 'Promoção', imagem: IMG_CAPUCCINO },
-    { id: '2', nome: 'Latte + Cheesecake', desc: 'Latte suave com fatia de frutas vermelhas', nota: '4.7', precoAntigo: '35,80', precoNovo: '28,90', categoria: 'Promoção', imagem: IMG_CHEESECAKE },
-    { id: '3', nome: 'Combo Lanche Leve', desc: 'Sanduíche natural e chá gelado de pêssego', nota: '4.6', precoAntigo: '30,80', precoNovo: '25,90', categoria: 'Promoção', imagem: IMG_COMBO },
-    { id: '4', nome: 'Mocha Especial', desc: 'Leite vaporizado, calda de chocolate belga', nota: '4.7', precoAntigo: '15,90', precoNovo: '12,90', categoria: 'Promoção', imagem: IMG_MOCHA },
-    { id: '5', nome: 'Combo Choc. Quente', desc: 'Chocolate quente cremoso e biscoitos', nota: '4.9', precoAntigo: '35,80', precoNovo: '29,90', categoria: 'Promoção', imagem: '' },
-    { id: '6', nome: 'Croissant Presunto', desc: 'Massa folhada recheada com queijo derretido', nota: '4.8', precoAntigo: '17,90', precoNovo: '14,90', categoria: 'Promoção', imagem: IMG_CROISSANT },
-    { id: '7', nome: 'Espresso + Cookie', desc: 'Espresso duplo e cookie com gotas de cacau', nota: '4.8', precoAntigo: '22,00', precoNovo: '16,50', categoria: 'Promoção', imagem: '' },
-    { id: '8', nome: 'Frappuccino Caramelo', desc: 'Café batido gelado com chantilly e calda', nota: '4.9', precoAntigo: '24,90', precoNovo: '19,90', categoria: 'Promoção', imagem: '' },
+    { id: '1', nome: 'Capuccino clássico', desc: 'Leite vaporizado e expresso cremoso', nota: '4.9', precoAntigo: '18,90', precoNovo: '13,90', categoria: 'Bebidas', imagem: IMG_CAPUCCINO },
+    { id: '2', nome: 'Latte + Cheesecake', desc: 'Latte suave com fatia de frutas vermelhas', nota: '4.7', precoAntigo: '35,80', precoNovo: '28,90', categoria: 'Doces', imagem: IMG_CHEESECAKE },
+    { id: '3', nome: 'Combo Lanche Leve', desc: 'Sanduíche natural e chá gelado de pêssego', nota: '4.6', precoAntigo: '30,80', precoNovo: '25,90', categoria: 'Salgados', imagem: IMG_COMBO },
+    { id: '4', nome: 'Mocha Especial', desc: 'Leite vaporizado, calda de chocolate belga', nota: '4.7', precoAntigo: '15,90', precoNovo: '12,90', categoria: 'Bebidas', imagem: IMG_MOCHA },
+    { id: '5', nome: 'Combo Choc. Quente', desc: 'Chocolate quente cremoso e biscoitos', nota: '4.9', precoAntigo: '35,80', precoNovo: '29,90', categoria: 'Bebidas', imagem: '' },
+    { id: '6', nome: 'Croissant Presunto', desc: 'Massa folhada recheada com queijo derretido', nota: '4.8', precoAntigo: '17,90', precoNovo: '14,90', categoria: 'Salgados', imagem: IMG_CROISSANT },
+    { id: '7', nome: 'Espresso + Cookie', desc: 'Espresso duplo e cookie com gotas de cacau', nota: '4.8', precoAntigo: '22,00', precoNovo: '16,50', categoria: 'Doces', imagem: '' },
+    { id: '8', nome: 'Frappuccino Caramelo', desc: 'Café batido gelado com chantilly e calda', nota: '4.9', precoAntigo: '24,90', precoNovo: '19,90', categoria: 'Bebidas', imagem: '' },
   ] as ProdutoCatalogo[],
 
   cupons: [
@@ -308,9 +319,11 @@ export function buscarProdutos() {
     .catch(() => [...loja.produtos]);
 }
 
-// O carrinho usa essa lista para calcular o desconto
-export function buscarCupons() {
-  return buscar('/cupons')
+// O carrinho usa essa lista para calcular o desconto.
+// doCliente = true: só os cupons que o usuário logado ainda pode usar.
+// doCliente = false (tela de funcionários): todos os cupons da loja.
+export function buscarCupons(doCliente = true) {
+  return buscar(doCliente ? '/cupons?usuario=' + idUsuario() : '/cupons')
     .then((lista) => {
       if (!Array.isArray(lista)) {
         return [...loja.cupons];

@@ -42,7 +42,7 @@ const callback = (req, res)=>{
         if(rota.pathname == '/produtos'){
             LojaBD.getProdutos(resposta)
         }else if(rota.pathname == '/cupons'){
-            LojaBD.getCupons(resposta)
+            LojaBD.getCupons(usuario, resposta)
         }else if(rota.pathname == '/perfil'){
             ClienteBD.getPerfil(usuario, resposta)
         }else if(rota.pathname == '/pedidos'){

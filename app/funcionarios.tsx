@@ -99,7 +99,7 @@ export default function FuncionariosScreen() {
       return;
     }
     buscarProdutos().then((lista) => setProdutos(lista));
-    buscarCupons().then((lista) => setCupons(lista));
+    buscarCupons(false).then((lista) => setCupons(lista));
   }, [liberado]);
 
   function entrar() {
@@ -136,6 +136,10 @@ export default function FuncionariosScreen() {
       const antigoNumero = lerNumero(precoAntigo);
       if (antigoNumero === null || antigoNumero <= 0) {
         setErro('O preço anterior precisa ser maior que zero.');
+        return;
+      }
+      if (antigoNumero <= precoNumero) {
+        setErro('O preço anterior precisa ser maior que o preço atual.');
         return;
       }
       antigo = formatarCampoPreco(antigoNumero);
@@ -245,7 +249,7 @@ export default function FuncionariosScreen() {
         setDescricaoCupom('');
         setValorCupom('');
         setSucesso('Cupom cadastrado na loja.');
-        buscarCupons().then((lista) => setCupons(lista));
+        buscarCupons(false).then((lista) => setCupons(lista));
       })
       .catch(() => {
         setCarregando(false);
@@ -293,7 +297,7 @@ export default function FuncionariosScreen() {
             return;
           }
           limparAvisos();
-          buscarCupons().then((lista) => setCupons(lista));
+          buscarCupons(false).then((lista) => setCupons(lista));
         })
         .catch(() => {
           setErro('Não foi possível conectar ao servidor. Confira se o back-end e o MySQL estão ligados.');

@@ -54,7 +54,28 @@ export default function HomeScreen() {
     }, [])
   );
 
-  const produtosFiltrados = catalogo.filter((produto) => produto.categoria === categoriaAtiva);
+  // Só é preço riscado quando o preço antigo é maior que o atual
+  function temPrecoRiscado(produto: ProdutoCatalogo) {
+    return produto.precoAntigo !== '' && paraNumero(produto.precoAntigo) > paraNumero(produto.precoNovo);
+  }
+
+  // Promoção = produto com preço riscado. Ele continua aparecendo também na categoria dele.
+  function estaEmPromocao(produto: ProdutoCatalogo) {
+    return produto.categoria === 'Promoção' || temPrecoRiscado(produto);
+  }
+
+  const textoBusca = busca.trim().toLowerCase();
+
+  const produtosFiltrados = catalogo.filter((produto) => {
+    // Com algo digitado na busca, procura em todas as categorias
+    if (textoBusca !== '') {
+      return produto.nome.toLowerCase().includes(textoBusca) || produto.desc.toLowerCase().includes(textoBusca);
+    }
+    if (categoriaAtiva === 'Promoção') {
+      return estaEmPromocao(produto);
+    }
+    return produto.categoria === categoriaAtiva;
+  });
 
   function favoritar(item: ProdutoCatalogo) {
     alternarFavorito({
@@ -101,7 +122,9 @@ export default function HomeScreen() {
                 <Ionicons name="menu" size={32} color={cor('#fff')} />
               </TouchableOpacity>
               <Image source={logo} style={styles.miniLogo} resizeMode="contain" />
-              <Image source={fotoDoUsuario()} style={styles.avatar} />
+              <TouchableOpacity onPress={() => router.push('/perfil')}>
+                <Image source={fotoDoUsuario()} style={styles.avatar} />
+              </TouchableOpacity>
             </View>
 
             <Text style={styles.welcomeText}>Bem vindo!</Text>
@@ -172,7 +195,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.priceRow}>
-          {item.precoAntigo !== '' && item.precoAntigo !== item.precoNovo ? (
+          {temPrecoRiscado(item) ? (
             <Text style={styles.oldPrice}>R${item.precoAntigo}</Text>
           ) : null}
           <Text style={styles.newPrice}>R${item.precoNovo}</Text>
@@ -341,7 +364,7 @@ export default function HomeScreen() {
         numColumns={2}
         columnWrapperStyle={styles.productRow}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         renderItem={renderProduto}
         ListFooterComponent={
           <TouchableOpacity style={styles.backToTopButton} onPress={voltarAoTopo}>
@@ -350,7 +373,11 @@ export default function HomeScreen() {
           </TouchableOpacity>
         }
         contentContainerStyle={{ paddingBottom: 110 }}
-        ListEmptyComponent={<Text style={styles.vazio}>Nenhum produto nesta categoria.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.vazio}>
+            {textoBusca !== '' ? 'Nenhum produto encontrado.' : 'Nenhum produto nesta categoria.'}
+          </Text>
+        }
       />
     </View>
   );

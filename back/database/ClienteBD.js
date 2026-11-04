@@ -186,11 +186,18 @@ class ClienteBD{
             var pedidoId = results.insertId
 
             // O carrinho do app guarda o nome do produto, então o id é achado pelo nome
-            var sqlItem = 'insert into pedido_itens (pedido_id, produto_id, tamanho, opcional, quantidade, preco_unitario) select ?, id, ?, ?, ?, ? from produtos where nome = ? limit 1'
+            // (se um produto removido tiver o mesmo nome, o ativo vem primeiro)
+            var sqlItem = 'insert into pedido_itens (pedido_id, produto_id, tamanho, opcional, quantidade, preco_unitario) select ?, id, ?, ?, ?, ? from produtos where nome = ? order by ativo desc limit 1'
 
             dados.itens.forEach((item)=>{
                 connection.query(sqlItem, [pedidoId, item.tamanho, item.opcional, item.qtd, item.precoUnitario, item.nome])
             })
+
+            // Cada cliente usa cada cupom uma vez só
+            if(dados.cupom){
+                var sqlCupom = 'insert into usuario_cupons (usuario_id, cupom_id, usado) select ?, id, true from cupons where codigo = ?'
+                connection.query(sqlCupom, [dados.usuario, dados.cupom])
+            }
 
             // Cada R$1,00 gasto vale 10 pontos de fidelidade
             var pontos = Math.round(dados.total * 10)
@@ -233,14 +240,14 @@ class ClienteBD{
     // ---------- FAVORITOS: coração do menu e do produto, aba favoritos ----------
 
     static getFavoritos(usuario, callback){
-        var sql = 'select distinct p.id, p.nome, p.descricao_curta, p.nota, p.preco, p.imagem from favoritos f join produtos p on p.id = f.produto_id where f.usuario_id = ? and f.ativo = true'
+        var sql = 'select distinct p.id, p.nome, p.descricao_curta, p.nota, p.preco, p.imagem from favoritos f join produtos p on p.id = f.produto_id where f.usuario_id = ? and f.ativo = true and p.ativo = true'
         ClienteBD.rodar(sql, usuario, callback)
     }
 
     // dados.favorito = true marca, false desmarca. O produto é achado pelo nome.
     static salvarFavorito(dados, callback){
         if(dados.favorito){
-            var sql = 'insert into favoritos (usuario_id, produto_id) select ?, id from produtos where nome = ? limit 1'
+            var sql = 'insert into favoritos (usuario_id, produto_id) select ?, id from produtos where nome = ? and ativo = true limit 1'
             ClienteBD.rodar(sql, [dados.usuario, dados.nome], callback, 'Favoritado!')
         }else{
             var sql = 'update favoritos f join produtos p on p.id = f.produto_id set f.ativo = false where f.usuario_id = ? and p.nome = ?'

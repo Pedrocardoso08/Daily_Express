@@ -11,7 +11,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { origemImagem } from '../../lib/imagens';
-import { buscarCupons, calcularDesconto, formatarPreco, ItemCarrinho, loja, NOMES_TAMANHO } from '../../lib/loja';
+import {
+  buscarCupons,
+  calcularDesconto,
+  cupomSoDeEntrega,
+  formatarPreco,
+  ItemCarrinho,
+  loja,
+  NOMES_TAMANHO,
+} from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
  
 export default function CarrinhoScreen() {
@@ -80,8 +88,11 @@ export default function CarrinhoScreen() {
   };
 
   function aplicarCupom() {
+    // Campo apagado + Aplicar = tira o cupom do pedido
     if (cupom.trim() === '') {
-      setMensagemCupom('Digite o código do cupom.');
+      setMensagemCupom(cupomAplicado !== '' ? 'Cupom removido.' : 'Digite o código do cupom.');
+      setCupomAplicado('');
+      loja.cupom = '';
       return;
     }
     if (calcularDesconto(cupom, 0) === -1) {
@@ -107,6 +118,7 @@ export default function CarrinhoScreen() {
       setAviso('Adicione algum produto ao carrinho.');
       return;
     }
+    setAviso('');
     loja.subtotal = subTotal;
     loja.desconto = desconto;
     setPerguntaAberta(true);
@@ -115,6 +127,10 @@ export default function CarrinhoScreen() {
   // Resposta da pergunta "Vai comer aqui ou levar?"
   function escolherModo(modo: 'Comer aqui' | 'Levar') {
     setPerguntaAberta(false);
+    if (modo === 'Comer aqui' && cupomAplicado !== '' && cupomSoDeEntrega(cupomAplicado)) {
+      setAviso('O cupom ' + cupomAplicado + ' só vale para entrega. Escolha "Levar" ou apague o cupom.');
+      return;
+    }
     loja.modo = modo;
     if (modo === 'Comer aqui') {
       loja.enderecoEntrega = '';
