@@ -8,6 +8,9 @@ import { buscar, enviar } from './api';
 // P, M e G só para bebidas. U = tamanho único (doces, salgados e promoções).
 export type Tamanho = 'P' | 'M' | 'G' | 'U';
 
+// Quantos ml tem cada copo da bebida (o funcionário escolhe no cadastro do produto)
+export type MlCopos = { P: number; M: number; G: number };
+
 export type ItemCarrinho = {
   id: string;
   // Só nos itens do histórico (vem do banco), usado para avaliar o produto
@@ -15,6 +18,8 @@ export type ItemCarrinho = {
   nome: string;
   desc: string;
   tamanho: Tamanho;
+  // ml do copo escolhido. Vazio no tamanho único.
+  ml?: number | null;
   opcional: string;
   precoUnitario: number;
   qtd: number;
@@ -28,6 +33,7 @@ export type ProdutoFavorito = {
   preco: string;
   imagem: string;
   categoria?: string;
+  ml: MlCopos;
 };
 
 export type Endereco = {
@@ -69,6 +75,7 @@ export type ProdutoCatalogo = {
   imagem: string;
   // false = esgotado (só aparece na tela de funcionários)
   disponivel?: boolean;
+  ml: MlCopos;
 };
 
 export type CupomLoja = {
@@ -92,16 +99,34 @@ export type Usuario = {
 
 // --- PREÇOS ---
 
-export const NOMES_TAMANHO = { P: '200 ml', M: '300 ml', G: '400 ml', U: 'Único' };
+// Usado nos produtos e pedidos de antes de o funcionário poder escolher os ml
+export const ML_PADRAO: MlCopos = { P: 200, M: 300, G: 400 };
 
-// Quanto cada tamanho soma ao preço cadastrado (o preço do copo de 200 ml)
+// "300 ml" nas bebidas e "Único" no resto
+export function nomeTamanho(tamanho: Tamanho, ml?: number | null) {
+  if (tamanho === 'U') {
+    return 'Único';
+  }
+  return (ml ? ml : ML_PADRAO[tamanho]) + ' ml';
+}
+
+// Lê os ml_p, ml_m e ml_g que vêm do banco
+function lerMl(item: any): MlCopos {
+  return {
+    P: item.ml_p ? Number(item.ml_p) : ML_PADRAO.P,
+    M: item.ml_m ? Number(item.ml_m) : ML_PADRAO.M,
+    G: item.ml_g ? Number(item.ml_g) : ML_PADRAO.G,
+  };
+}
+
+// Quanto cada tamanho soma ao preço cadastrado (o preço do copo pequeno)
 const ACRESCIMO_TAMANHO = { P: 0, M: 2, G: 4, U: 0 };
 
 export function precoPorTamanho(precoBase: number, tamanho: Tamanho) {
   return precoBase + ACRESCIMO_TAMANHO[tamanho];
 }
 
-// Só bebidas têm tamanho (começa no copo de 200 ml). O resto é tamanho único.
+// Só bebidas têm tamanho (começa no copo pequeno). O resto é tamanho único.
 export function tamanhoInicial(categoria?: string): Tamanho {
   return categoria === 'Bebidas' ? 'P' : 'U';
 }
@@ -342,6 +367,7 @@ export function buscarProdutos(todos = false) {
         categoria: item.categoria,
         imagem: item.imagem ? item.imagem : '',
         disponivel: item.disponivel !== 0,
+        ml: lerMl(item),
       }));
 
       return [...loja.produtos];
@@ -388,6 +414,7 @@ export function buscarFavoritos() {
         preco: textoPreco(item.preco),
         imagem: item.imagem ? item.imagem : '',
         categoria: item.categoria,
+        ml: lerMl(item),
       }));
 
       return [...loja.favoritos];

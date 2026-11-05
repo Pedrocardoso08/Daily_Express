@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import SeloOds12, { COR_ODS12 } from '../components/SeloOds12';
 import { origemImagem } from '../lib/imagens';
 import {
   adicionarAoCarrinho,
@@ -17,7 +18,9 @@ import {
   buscarFavoritos,
   ehFavorito,
   formatarPreco,
-  NOMES_TAMANHO,
+  ML_PADRAO,
+  MlCopos,
+  nomeTamanho,
   paraNumero,
   precoPorTamanho,
   sair,
@@ -51,6 +54,9 @@ export default function ProdutoDetalhesScreen() {
     preco?: string;
     imagem?: string;
     categoria?: string;
+    mlP?: string;
+    mlM?: string;
+    mlG?: string;
   }>();
 
   // Tudo vem do produto tocado no menu ou nos favoritos (cadastrado pelo funcionário)
@@ -64,6 +70,12 @@ export default function ProdutoDetalhesScreen() {
   const categoria = texto(params.categoria, '');
   // Só bebidas escolhem o tamanho do copo; o resto é tamanho único
   const temTamanho = categoria === 'Bebidas';
+  // ml de cada copo, cadastrados pelo funcionário
+  const ml: MlCopos = {
+    P: Number(texto(params.mlP, String(ML_PADRAO.P))),
+    M: Number(texto(params.mlM, String(ML_PADRAO.M))),
+    G: Number(texto(params.mlG, String(ML_PADRAO.G))),
+  };
 
   const [menuAberto, setMenuAberto] = useState(false);
   const [favorito, setFavorito] = useState(ehFavorito(nome));
@@ -83,7 +95,7 @@ export default function ProdutoDetalhesScreen() {
   const precoTotal = precoUnitario * quantidade;
 
   function favoritar() {
-    alternarFavorito({ nome, desc: texto(params.descricao, ''), nota, preco, imagem, categoria });
+    alternarFavorito({ nome, desc: texto(params.descricao, ''), nota, preco, imagem, categoria, ml });
     setFavorito(!favorito);
   }
 
@@ -92,6 +104,7 @@ export default function ProdutoDetalhesScreen() {
       nome,
       desc: texto(params.descricao, ''),
       tamanho,
+      ml: tamanho === 'U' ? null : ml[tamanho],
       opcional: '---',
       precoUnitario,
       qtd: quantidade,
@@ -140,6 +153,17 @@ export default function ProdutoDetalhesScreen() {
             </View>
 
             <View style={styles.sidebarMenu}>
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
+                  router.push('/pedidosAtivos');
+                }}
+              >
+                <Ionicons name="time-outline" size={22} color={cor('#4A3525')} />
+                <Text style={styles.sidebarItemText}>Pedidos ativos</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.sidebarItem}
                 onPress={() => {
@@ -204,6 +228,17 @@ export default function ProdutoDetalhesScreen() {
               >
                 <Ionicons name="information-circle-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Sobre nós</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
+                  router.push('/ods12');
+                }}
+              >
+                <Ionicons name="infinite" size={22} color={COR_ODS12} />
+                <Text style={[styles.sidebarItemText, { color: COR_ODS12, fontWeight: '800' }]}>Nossa ODS 12</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -283,7 +318,7 @@ export default function ProdutoDetalhesScreen() {
                     activeOpacity={0.8}
                   >
                     <Text style={[styles.sizeText, tamanho === item && styles.sizeTextActive]}>
-                      {NOMES_TAMANHO[item]}
+                      {nomeTamanho(item, ml[item])}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -309,6 +344,10 @@ export default function ProdutoDetalhesScreen() {
                 <Ionicons name="add" size={20} color={cor('#FFFFFF')} />
               </TouchableOpacity>
             </View>
+          </View>
+
+          <View style={styles.sectionBlock}>
+            <SeloOds12 compacto texto="Servido em embalagem reciclada · ODS 12" />
           </View>
 
           <View style={styles.footerRow}>

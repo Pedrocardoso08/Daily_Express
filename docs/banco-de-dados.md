@@ -40,7 +40,8 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
 - **Como é preenchida:** quando o funcionário cadastra o primeiro produto de uma categoria, [back/database/LojaBD.js](../back/database/LojaBD.js) cria a categoria.
 
 ### 4. produtos
-- **Campos:** id, categoria_id, nome, descricao_curta, descricao_completa, preco (copo pequeno), preco_antigo (preço riscado), imagem, disponivel, ativo.
+- **Campos:** id, categoria_id, nome, descricao_curta, descricao_completa, preco (copo pequeno), preco_antigo (preço riscado), imagem, ml_p, ml_m, ml_g, disponivel, ativo.
+- **ml_p, ml_m, ml_g:** quantos ml têm os copos pequeno, médio e grande. Só as bebidas têm; o funcionário escolhe no cadastro (precisam crescer do pequeno para o grande). Produto antigo sem esses valores usa 200, 300 e 400 ml.
 - **nota:** não é uma coluna. O back-end calcula a média da tabela **avaliacoes** toda vez que lê os produtos. Sem nenhuma avaliação, o app mostra "Novo".
 - **imagem:** um link (http...) ou o caminho da imagem escolhida na galeria pela Área do funcionário (`fotos/produto_...jpg`, salva na pasta `back/fotos`).
 - **disponivel:** `FALSE` quando o produto está esgotado. Ele some do cardápio e dos favoritos, mas continua na lista do funcionário para voltar depois.
@@ -50,7 +51,7 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
   - [app/funcionarios.tsx](../app/funcionarios.tsx) cadastra, edita, esgota e remove.
 
 ### 5. tamanhos
-- **Campos:** sigla, nome, acrescimo. P, M e G são os copos das bebidas (200, 300 e 400 ml, com acréscimo de R$0,00, R$2,00 e R$4,00). U é o tamanho único dos doces, salgados e promoções (R$0,00).
+- **Campos:** sigla, nome, acrescimo. P, M e G são os copos pequeno, médio e grande das bebidas (acréscimo de R$0,00, R$2,00 e R$4,00; os ml de cada copo ficam no produto). U é o tamanho único dos doces, salgados e promoções (R$0,00).
 - **Onde age:** [app/produto.tsx](../app/produto.tsx) calcula o preço pelo tamanho. O preço final é `preco + acrescimo`, vezes a quantidade.
 - **Como é preenchida:** no primeiro pedido, [back/database/ClienteBD.js](../back/database/ClienteBD.js) cria P, M e G (os itens do pedido só aceitam tamanhos que existam nesta tabela).
 
@@ -93,18 +94,19 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
 
 ### 12. pedidos
 - **Campos:** id, usuario_id, modo (Comer aqui ou Levar), endereco_entrega (texto), forma_pagamento, cupom (texto), subtotal, desconto, total, status (Preparando, A caminho, Finalizado ou Cancelado), criado_em.
-- **Cancelado:** a tela avisa que a loja fica com 30% do valor e só 70% volta para o cliente. É só um aviso: nenhum valor é mexido no banco.
+- **Cancelado:** só o próprio cliente cancela, enquanto o pedido está Preparando ou A caminho. A tela avisa que a loja fica com 30% do valor e só 70% volta para o cliente. É só um aviso: nenhum valor é mexido no banco.
 - **Por que o endereço é texto:** o histórico precisa continuar mostrando o endereço mesmo se ele for apagado da tela de Endereços.
 - **Onde age:**
   - [app/(tabs)/carrinho.tsx](../app/(tabs)/carrinho.tsx): a pergunta "Vai comer aqui ou levar?" define o `modo`.
   - [app/entrega.tsx](../app/entrega.tsx) define o `endereco_entrega`.
   - [app/pagamento.tsx](../app/pagamento.tsx) cria o pedido ao tocar em Finalizar.
-  - [app/historicoPedidos.tsx](../app/historicoPedidos.tsx) lista e busca.
-  - [app/funcionarios.tsx](../app/funcionarios.tsx), aba Pedidos: lista os pedidos de todos os clientes, muda o `status`, finaliza, cancela (com um código de 3 dígitos para confirmar) e faz o resumo do dia.
+  - [app/pedidosAtivos.tsx](../app/pedidosAtivos.tsx) mostra só os pedidos Preparando ou A caminho e cancela o pedido (com um código de 3 dígitos para confirmar).
+  - [app/historicoPedidos.tsx](../app/historicoPedidos.tsx) lista e busca todos os pedidos.
+  - [app/funcionarios.tsx](../app/funcionarios.tsx), aba Pedidos: lista os pedidos de todos os clientes, muda o `status`, finaliza e faz o resumo do dia.
 
 ### 13. pedido_itens
-- **Campos:** id, pedido_id, produto_id, tamanho, opcional, quantidade, preco_unitario.
-- **Detalhe:** o preço fica salvo como era no dia da compra, para não mudar se o produto mudar de preço depois.
+- **Campos:** id, pedido_id, produto_id, tamanho, ml, opcional, quantidade, preco_unitario.
+- **Detalhe:** o preço e o ml do copo ficam salvos como eram no dia da compra, para não mudar se o funcionário mudar o produto depois.
 - **Onde age:**
   - [app/pagamento.tsx](../app/pagamento.tsx) copia os itens do carrinho.
   - [app/historicoPedidos.tsx](../app/historicoPedidos.tsx) mostra os itens e usa no "Pedir Novamente".

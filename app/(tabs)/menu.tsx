@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import SeloOds12, { COR_ODS12 } from '../../components/SeloOds12';
 import { banner, estiloLogo, fotoDoUsuario, logo, origemImagem } from '../../lib/imagens';
 import {
   adicionarAoCarrinho,
@@ -86,6 +87,7 @@ export default function HomeScreen() {
       preco: item.precoNovo,
       imagem: item.imagem,
       categoria: item.categoria,
+      ml: item.ml,
     });
     setFavoritos(loja.favoritos.map((produto) => produto.nome));
   }
@@ -94,10 +96,12 @@ export default function HomeScreen() {
     if (estaNoCarrinho(item.nome)) {
       removerDoCarrinho(item.nome);
     } else {
+      const tamanho = tamanhoInicial(item.categoria);
       adicionarAoCarrinho({
         nome: item.nome,
         desc: item.desc,
-        tamanho: tamanhoInicial(item.categoria),
+        tamanho: tamanho,
+        ml: tamanho === 'U' ? null : item.ml[tamanho],
         opcional: '---',
         precoUnitario: paraNumero(item.precoNovo),
         qtd: 1,
@@ -145,6 +149,10 @@ export default function HomeScreen() {
         </ImageBackground>
       </View>
 
+      <View style={styles.seloOds}>
+        <SeloOds12 texto="Embalagens recicladas, desperdício zero e borra de café virando adubo. Toque e conheça." />
+      </View>
+
       <View style={styles.categoriesSection}>
         <Text style={styles.sectionTitle}>Categorias</Text>
         <FlatList
@@ -184,6 +192,9 @@ export default function HomeScreen() {
             preco: item.precoNovo,
             imagem: item.imagem,
             categoria: item.categoria,
+            mlP: item.ml.P,
+            mlM: item.ml.M,
+            mlG: item.ml.G,
           },
         })
       }
@@ -271,6 +282,17 @@ export default function HomeScreen() {
                 style={styles.sidebarItem}
                 onPress={() => {
                   setMenuAberto(false);
+                  router.push('/pedidosAtivos');
+                }}
+              >
+                <Ionicons name="time-outline" size={22} color={cor('#4A3525')} />
+                <Text style={styles.sidebarItemText}>Pedidos ativos</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
                   router.push('/historicoPedidos');
                 }}
               >
@@ -331,6 +353,17 @@ export default function HomeScreen() {
               >
                 <Ionicons name="information-circle-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Sobre nós</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
+                  router.push('/ods12');
+                }}
+              >
+                <Ionicons name="infinite" size={22} color={COR_ODS12} />
+                <Text style={[styles.sidebarItemText, { color: COR_ODS12, fontWeight: '800' }]}>Nossa ODS 12</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -496,6 +529,10 @@ const styles = criarEstilos({
     color: '#333',
   },
 
+  seloOds: {
+    marginHorizontal: 20,
+    marginTop: 16,
+  },
   categoriesSection: {
     marginTop: 20,
     paddingHorizontal: 20,

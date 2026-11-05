@@ -3,7 +3,6 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   Text,
@@ -45,7 +44,7 @@ const ABAS: { id: Aba; titulo: string }[] = [
 ];
 
 // Os passos do pedido em andamento. O cliente vê o mesmo texto no histórico.
-// Depois disso o pedido é fechado com os botões Finalizar ou Cancelar.
+// Depois disso o pedido é fechado com o botão Finalizar. Cancelar é só o cliente, no histórico.
 const STATUS_PEDIDO = ['Preparando', 'A caminho'];
 const FILTROS_PEDIDO = ['Todos', 'Preparando', 'A caminho', 'Finalizado', 'Cancelado'];
 
@@ -121,12 +120,6 @@ export default function FuncionariosScreen() {
 
   const [pedidos, setPedidos] = useState<PedidoLoja[]>([]);
   const [filtroStatus, setFiltroStatus] = useState('Todos');
-
-  // Caixa de cancelar pedido: aberta quando "cancelando" tem um pedido
-  const [cancelando, setCancelando] = useState<PedidoLoja | null>(null);
-  const [codigoCancelar, setCodigoCancelar] = useState('');
-  const [codigoDigitado, setCodigoDigitado] = useState('');
-  const [erroCancelar, setErroCancelar] = useState('');
   const [produtos, setProdutos] = useState<ProdutoCatalogo[]>([...loja.produtos]);
   const [cupons, setCupons] = useState<CupomLoja[]>([...loja.cupons]);
   const [avisos, setAvisos] = useState<Aviso[]>([]);
@@ -141,6 +134,10 @@ export default function FuncionariosScreen() {
   const [precoAntigo, setPrecoAntigo] = useState('');
   // Link (http...) ou caminho da imagem enviada da galeria (fotos/produto_...jpg)
   const [imagem, setImagem] = useState('');
+  // ml dos copos pequeno, médio e grande (só bebidas)
+  const [mlP, setMlP] = useState('');
+  const [mlM, setMlM] = useState('');
+  const [mlG, setMlG] = useState('');
 
   // Formulário de cupom
   const [codigo, setCodigo] = useState('');
@@ -246,26 +243,6 @@ export default function FuncionariosScreen() {
     mandar('/statusPedido', { id: pedido.id, status: status });
   }
 
-  // Abre a caixa com um código novo de 3 dígitos (de 100 a 999)
-  function abrirCancelamento(pedido: PedidoLoja) {
-    setCancelando(pedido);
-    setCodigoCancelar(String(Math.floor(100 + Math.random() * 900)));
-    setCodigoDigitado('');
-    setErroCancelar('');
-  }
-
-  function confirmarCancelamento() {
-    if (!cancelando) {
-      return;
-    }
-    if (codigoDigitado !== codigoCancelar) {
-      setErroCancelar('Código errado. Digite ' + codigoCancelar + ' para confirmar.');
-      return;
-    }
-    mudarStatus(cancelando, 'Cancelado');
-    setCancelando(null);
-  }
-
   // ---------- PRODUTOS ----------
 
   function limparProduto() {
@@ -276,6 +253,9 @@ export default function FuncionariosScreen() {
     setPreco('');
     setPrecoAntigo('');
     setImagem('');
+    setMlP('');
+    setMlM('');
+    setMlG('');
   }
 
   // Abre a galeria (no navegador, a janela de escolher arquivo) e manda a imagem para o back-end
@@ -324,6 +304,9 @@ export default function FuncionariosScreen() {
     setPreco(item.precoNovo);
     setPrecoAntigo(item.precoAntigo);
     setImagem(item.imagem);
+    setMlP(String(item.ml.P));
+    setMlM(String(item.ml.M));
+    setMlG(String(item.ml.G));
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
@@ -361,6 +344,21 @@ export default function FuncionariosScreen() {
       return;
     }
 
+    const ehBebida = categoria === 'Bebidas';
+    const copoP = Number(mlP);
+    const copoM = Number(mlM);
+    const copoG = Number(mlG);
+    if (ehBebida) {
+      if (copoP <= 0 || copoM <= 0 || copoG <= 0) {
+        setErro('Preencha os ml dos três copos.');
+        return;
+      }
+      if (!(copoP < copoM && copoM < copoG)) {
+        setErro('Os ml precisam crescer: pequeno < médio < grande.');
+        return;
+      }
+    }
+
     mandar(
       '/produto',
       {
@@ -371,6 +369,9 @@ export default function FuncionariosScreen() {
         preco: precoNumero,
         precoAntigo: antigo === '' ? null : lerNumero(antigo),
         imagem: link === '' ? null : link,
+        mlP: ehBebida ? copoP : null,
+        mlM: ehBebida ? copoM : null,
+        mlG: ehBebida ? copoG : null,
       },
       limparProduto
     );
@@ -540,8 +541,9 @@ export default function FuncionariosScreen() {
     }
   });
 
-  const pedidosFiltrados = pedidos.filter(
-    (pedido) => filtroStatus === 'Todos' || pedido.status === filtroStatus
+  // Cancelados saem da lista e só aparecem no filtro Cancelado
+  const pedidosFiltrados = pedidos.filter((pedido) =>
+    filtroStatus === 'Todos' ? pedido.status !== 'Cancelado' : pedido.status === filtroStatus
   );
 
   return (
@@ -632,7 +634,7 @@ export default function FuncionariosScreen() {
                   </Text>
                 ) : null}
 
-                {/* Pedido em andamento: passos e botões para fechar */}
+                {/* Pedido em andamento: passos e botão para finalizar */}
                 {pedido.status !== 'Finalizado' && pedido.status !== 'Cancelado' ? (
                   <View style={styles.pedidoAcoes}>
                     <View style={styles.chips}>
@@ -649,22 +651,13 @@ export default function FuncionariosScreen() {
                         </TouchableOpacity>
                       ))}
                     </View>
-                    <View style={styles.linhaBotoes}>
-                      <TouchableOpacity
-                        style={[styles.botao, styles.botaoMetade]}
-                        onPress={() => mudarStatus(pedido, 'Finalizado')}
-                        disabled={carregando}
-                      >
-                        <Text style={styles.botaoTexto}>Finalizar pedido</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.botaoSecundario, styles.botaoMetade]}
-                        onPress={() => abrirCancelamento(pedido)}
-                        disabled={carregando}
-                      >
-                        <Text style={styles.botaoSecundarioTexto}>Cancelar pedido</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.botao}
+                      onPress={() => mudarStatus(pedido, 'Finalizado')}
+                      disabled={carregando}
+                    >
+                      <Text style={styles.botaoTexto}>Finalizar pedido</Text>
+                    </TouchableOpacity>
                   </View>
                 ) : null}
               </View>
@@ -713,6 +706,43 @@ export default function FuncionariosScreen() {
                 placeholder="18,90"
                 keyboardType="decimal-pad"
               />
+              {categoria === 'Bebidas' ? (
+                <View>
+                  <Text style={styles.rotulo}>Tamanho dos copos (ml)</Text>
+                  <Text style={styles.legendaCampo}>
+                    O preço acima é o do copo pequeno. O médio custa +R$2,00 e o grande +R$4,00.
+                  </Text>
+                  <View style={styles.linhaCampos}>
+                    <View style={styles.campoTerco}>
+                      <Campo
+                        rotulo="Pequeno"
+                        value={mlP}
+                        onChangeText={(texto: string) => setMlP(soNumeros(texto))}
+                        placeholder="200"
+                        keyboardType="number-pad"
+                      />
+                    </View>
+                    <View style={styles.campoTerco}>
+                      <Campo
+                        rotulo="Médio"
+                        value={mlM}
+                        onChangeText={(texto: string) => setMlM(soNumeros(texto))}
+                        placeholder="300"
+                        keyboardType="number-pad"
+                      />
+                    </View>
+                    <View style={styles.campoTerco}>
+                      <Campo
+                        rotulo="Grande"
+                        value={mlG}
+                        onChangeText={(texto: string) => setMlG(soNumeros(texto))}
+                        placeholder="400"
+                        keyboardType="number-pad"
+                      />
+                    </View>
+                  </View>
+                </View>
+              ) : null}
               <Text style={styles.rotulo}>Imagem (opcional)</Text>
               <View style={styles.imagemLinha}>
                 {imagem !== '' ? (
@@ -774,6 +804,7 @@ export default function FuncionariosScreen() {
                   </Text>
                   <Text style={styles.itemDetalhe}>
                     {item.categoria} · R${item.precoNovo}
+                    {item.categoria === 'Bebidas' ? ' · ' + item.ml.P + '/' + item.ml.M + '/' + item.ml.G + ' ml' : ''}
                     {item.disponivel === false ? ' · Esgotado' : ''}
                   </Text>
                 </View>
@@ -988,49 +1019,6 @@ export default function FuncionariosScreen() {
           </View>
         ) : null}
       </ScrollView>
-
-      {/* ---------- CAIXA DE CANCELAR PEDIDO ---------- */}
-      <Modal
-        visible={cancelando !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setCancelando(null)}
-      >
-        <View style={styles.modalFundo}>
-          <View style={styles.modalCaixa}>
-            <Text style={styles.modalTitulo}>Digite {codigoCancelar} para cancelar</Text>
-            {cancelando ? (
-              <View style={styles.modalInfo}>
-                <Text style={styles.modalTexto}>
-                  Pedido #{cancelando.id} de {cancelando.cliente}, pago {formatarPreco(cancelando.total)}.
-                </Text>
-                <Text style={styles.modalAvisoTaxa}>
-                  Atenção: cancelar gera uma taxa de 30% do valor pago ({formatarPreco(cancelando.total * 0.3)}).
-                  Só 70% ({formatarPreco(cancelando.total * 0.7)}) volta para o cliente.
-                </Text>
-              </View>
-            ) : null}
-            <TextInput
-              style={[styles.campo, styles.modalCampo]}
-              placeholder="000"
-              placeholderTextColor={cor('#8C837A')}
-              value={codigoDigitado}
-              onChangeText={(texto) => setCodigoDigitado(soNumeros(texto))}
-              keyboardType="number-pad"
-              maxLength={3}
-            />
-            {erroCancelar !== '' ? <Text style={[styles.erro, styles.erroAcesso]}>{erroCancelar}</Text> : null}
-            <View style={styles.linhaBotoes}>
-              <TouchableOpacity style={[styles.botaoSecundario, styles.botaoMetade]} onPress={() => setCancelando(null)}>
-                <Text style={styles.botaoSecundarioTexto}>Voltar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.botaoPerigo, styles.botaoMetade]} onPress={confirmarCancelamento}>
-                <Text style={styles.botaoTexto}>Cancelar pedido</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -1185,6 +1173,19 @@ const styles = criarEstilos({
   campoGrupo: {
     gap: 6,
   },
+  linhaCampos: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  campoTerco: {
+    flex: 1,
+  },
+  legendaCampo: {
+    fontSize: 12,
+    color: '#4A3525',
+    marginTop: 4,
+  },
   rotulo: {
     color: '#4A3525',
     fontSize: 13,
@@ -1275,58 +1276,6 @@ const styles = criarEstilos({
   pedidoCancelado: {
     color: '#8B2E2E',
     fontWeight: '700',
-  },
-  linhaBotoes: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  botaoMetade: {
-    flex: 1,
-    marginTop: 0,
-    justifyContent: 'center',
-  },
-  botaoPerigo: {
-    backgroundColor: '#8B2E2E',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  modalFundo: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCaixa: {
-    backgroundColor: '#F6EBDD',
-    borderRadius: 16,
-    padding: 20,
-    gap: 12,
-  },
-  modalTitulo: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#3B291A',
-    textAlign: 'center',
-  },
-  modalInfo: {
-    gap: 8,
-  },
-  modalTexto: {
-    fontSize: 14,
-    color: '#4A3525',
-    textAlign: 'center',
-  },
-  modalAvisoTaxa: {
-    fontSize: 14,
-    color: '#8B2E2E',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  modalCampo: {
-    textAlign: 'center',
-    fontSize: 22,
-    letterSpacing: 6,
   },
   botao: {
     backgroundColor: '#4A3525',

@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import SeloOds12 from '../components/SeloOds12';
 import { cor, criarEstilos, useTema } from '../lib/tema';
  
 export default function FinalizadoScreen() {
@@ -29,6 +30,10 @@ export default function FinalizadoScreen() {
 <Text style={styles.statusText}>
           Seu pedido já está a{'\n'}sendo feito!
 </Text>
+
+        <View style={styles.seloOds}>
+          <SeloOds12 texto="Obrigado por consumir de forma responsável! Depois, jogue o copo e a tampa no lixo reciclável." />
+        </View>
  
         {/* Botão Voltar */}
 <TouchableOpacity 
@@ -78,6 +83,10 @@ const styles = criarEstilos({
     color: '#2A1F17',
     textAlign: 'center',
     lineHeight: 18,
+    marginBottom: 22,
+  },
+  seloOds: {
+    alignSelf: 'stretch',
     marginBottom: 22,
   },
   backButton: {

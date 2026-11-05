@@ -60,6 +60,7 @@ CREATE TABLE categorias(
 -- PRODUTOS
 -- Telas: menu (lista e busca), produto (detalhe)
 -- preco = preço atual do copo pequeno, preco_antigo = preço riscado
+-- ml_p, ml_m, ml_g = ml dos copos pequeno, médio e grande (só bebidas; o funcionário escolhe)
 -- disponivel = FALSE quando o produto está esgotado (some do cardápio por um tempo)
 -- A nota do produto não fica aqui: é a média da tabela avaliacoes.
 -- =====================================================
@@ -72,6 +73,9 @@ CREATE TABLE produtos(
     preco DECIMAL(10,2) NOT NULL,
     preco_antigo DECIMAL(10,2),
     imagem VARCHAR(255),
+    ml_p INT,
+    ml_m INT,
+    ml_g INT,
     disponivel BOOLEAN DEFAULT TRUE,
     ativo BOOLEAN DEFAULT TRUE,
     FOREIGN KEY (categoria_id) REFERENCES categorias(id)
@@ -80,7 +84,7 @@ CREATE TABLE produtos(
 -- =====================================================
 -- TAMANHOS
 -- Tela: produto (o preço sobe conforme o tamanho)
--- P, M e G = copos de 200, 300 e 400 ml (só bebidas); U = tamanho único (o resto)
+-- P, M e G = copos pequeno, médio e grande (só bebidas; os ml ficam no produto); U = tamanho único (o resto)
 -- =====================================================
 CREATE TABLE tamanhos(
     sigla CHAR(1) PRIMARY KEY,
@@ -186,7 +190,7 @@ CREATE TABLE usuario_cupons(
 -- Telas: carrinho (modo), entrega (endereço), pagamento (cria o pedido),
 -- historicoPedidos (lista)
 -- modo: Comer aqui ou Levar
--- status: Preparando, A caminho, Finalizado ou Cancelado (muda na Área do funcionário)
+-- status: Preparando, A caminho, Finalizado (muda na Área do funcionário) ou Cancelado (só o cliente cancela, na tela Pedidos ativos)
 -- O endereço e o cupom ficam em texto para o histórico não mudar
 -- se o endereço for apagado depois.
 -- =====================================================
@@ -209,13 +213,14 @@ CREATE TABLE pedidos(
 -- ITENS DE CADA PEDIDO
 -- Telas: pagamento (copia do carrinho), historicoPedidos (mostra e
 -- "Pedir Novamente")
--- O preço fica salvo como era no dia da compra.
+-- O preço e o ml do copo ficam salvos como eram no dia da compra.
 -- =====================================================
 CREATE TABLE pedido_itens(
     id INT PRIMARY KEY AUTO_INCREMENT,
     pedido_id INT NOT NULL,
     produto_id INT NOT NULL,
     tamanho CHAR(1) DEFAULT 'P',
+    ml INT,
     opcional VARCHAR(50) DEFAULT '---',
     quantidade INT DEFAULT 1,
     preco_unitario DECIMAL(10,2) NOT NULL,

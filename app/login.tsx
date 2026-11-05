@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Text, TextInput, View, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import SeloOds12 from '../components/SeloOds12';
 import { API } from '../lib/api';
 import { estiloLogo, logo } from '../lib/imagens';
 import { dataDeHoje, salvarUsuario } from '../lib/loja';
@@ -145,6 +146,10 @@ export default function LoginScreen() {
           <Ionicons name="briefcase-outline" size={16} color={cor('#4A3525')} />
           <Text style={styles.funcionarioTexto}>Área do funcionário</Text>
         </TouchableOpacity>
+
+        <View style={styles.seloOds}>
+          <SeloOds12 compacto texto="Empresa comprometida com a ODS 12 da ONU" />
+        </View>
       </View>
 
     </View>
@@ -247,6 +252,9 @@ const styles = criarEstilos({
     fontSize: 14,
     fontWeight: 'bold',
     textDecorationLine: 'underline',
+  },
+  seloOds: {
+    marginTop: 18,
   },
   funcionarioBotao: {
     flexDirection: 'row',

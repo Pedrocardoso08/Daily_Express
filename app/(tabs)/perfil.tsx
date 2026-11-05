@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { COR_ODS12 } from '../../components/SeloOds12';
 import { fotoDoUsuario } from '../../lib/imagens';
 import { loja, sair } from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
@@ -139,6 +140,17 @@ export default function PerfilScreen() {
                 style={styles.sidebarItem}
                 onPress={() => {
                   setMenuAberto(false);
+                  router.push('/pedidosAtivos');
+                }}
+              >
+                <Ionicons name="time-outline" size={22} color={cor('#4A3525')} />
+                <Text style={styles.sidebarItemText}>Pedidos ativos</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
                   router.push('/historicoPedidos');
                 }}
               >
@@ -199,6 +211,17 @@ export default function PerfilScreen() {
               >
                 <Ionicons name="information-circle-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Sobre nós</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setMenuAberto(false);
+                  router.push('/ods12');
+                }}
+              >
+                <Ionicons name="infinite" size={22} color={COR_ODS12} />
+                <Text style={[styles.sidebarItemText, { color: COR_ODS12, fontWeight: '800' }]}>Nossa ODS 12</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

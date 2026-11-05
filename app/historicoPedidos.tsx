@@ -18,7 +18,7 @@ import {
   idUsuario,
   ItemCarrinho,
   loja,
-  NOMES_TAMANHO,
+  nomeTamanho,
   Pedido,
 } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
@@ -91,6 +91,7 @@ export default function HistoricoPedidosScreen() {
         nome: item.nome,
         desc: item.desc,
         tamanho: item.tamanho,
+        ml: item.ml,
         opcional: item.opcional,
         precoUnitario: item.precoUnitario,
         qtd: item.qtd,
@@ -146,7 +147,7 @@ export default function HistoricoPedidosScreen() {
       </View>
       {item.status === 'Cancelado' ? (
         <Text style={styles.canceladoText}>
-          Pedido cancelado pela loja. {formatarPreco(item.total * 0.7)} (70% do valor) será devolvido.
+          Pedido cancelado. {formatarPreco(item.total * 0.7)} (70% do valor) será devolvido.
         </Text>
       ) : null}
 
@@ -156,7 +157,7 @@ export default function HistoricoPedidosScreen() {
             <Image source={origemImagem(prod.imagem, prod.nome)} style={styles.productImage} />
             <View style={styles.productInfo}>
               <Text style={styles.productName}>
-                {prod.qtd}x {prod.nome} ({NOMES_TAMANHO[prod.tamanho]})
+                {prod.qtd}x {prod.nome} ({nomeTamanho(prod.tamanho, prod.ml)})
               </Text>
               {prod.produtoId ? (
                 <View style={styles.starsRow}>

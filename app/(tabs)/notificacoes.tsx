@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { COR_ODS12 } from '../../components/SeloOds12';
 import { buscar, enviar } from '../../lib/api';
 import { estiloLogo, fotoDoUsuario, logo } from '../../lib/imagens';
 import { idUsuario, sair } from '../../lib/loja';
@@ -56,7 +57,7 @@ export default function NotificacoesScreen() {
       .catch(() => {});
   };
 
-  function irPara(rota: '/historicoPedidos' | '/cupons' | '/endereco' | '/ajuda' | '/faleconosco' | '/sobrenos') {
+  function irPara(rota: '/pedidosAtivos' | '/historicoPedidos' | '/ods12' | '/cupons' | '/endereco' | '/ajuda' | '/faleconosco' | '/sobrenos') {
     setMenuAberto(false);
     router.push(rota);
   }
@@ -157,6 +158,11 @@ export default function NotificacoesScreen() {
             </View>
 
             <View style={styles.sidebarMenu}>
+              <TouchableOpacity style={styles.sidebarItem} onPress={() => irPara('/pedidosAtivos')}>
+                <Ionicons name="time-outline" size={22} color={cor('#4A3525')} />
+                <Text style={styles.sidebarItemText}>Pedidos ativos</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity style={styles.sidebarItem} onPress={() => irPara('/historicoPedidos')}>
                 <Ionicons name="folder-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Histórico de pedidos</Text>
@@ -185,6 +191,11 @@ export default function NotificacoesScreen() {
               <TouchableOpacity style={styles.sidebarItem} onPress={() => irPara('/sobrenos')}>
                 <Ionicons name="information-circle-outline" size={22} color={cor('#4A3525')} />
                 <Text style={styles.sidebarItemText}>Sobre nós</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.sidebarItem} onPress={() => irPara('/ods12')}>
+                <Ionicons name="infinite" size={22} color={COR_ODS12} />
+                <Text style={[styles.sidebarItemText, { color: COR_ODS12, fontWeight: '800' }]}>Nossa ODS 12</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

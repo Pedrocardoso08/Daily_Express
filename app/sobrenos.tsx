@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import SeloOds12, { COR_ODS12 } from '../components/SeloOds12';
 import { estiloLogo, logo } from '../lib/imagens';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
@@ -65,8 +66,38 @@ export default function SobreNosScreen() {
 
         <View style={styles.missionContainer}>
           <Text style={styles.missionText}>
-            Nossa missão é oferecer cafés especiais, bebidas artesanais e doces preparados com ingredientes selecionados, criando momentos únicos para nossos clientes e preservando o meio ambiente com produtos reciclados.
+            Nossa missão é oferecer cafés especiais, bebidas artesanais e doces preparados com ingredientes selecionados, criando momentos únicos para nossos clientes e preservando o meio ambiente com embalagens recicladas.
           </Text>
+          <Text style={styles.missionOds}>
+            Somos uma cafeteria que segue a ODS 12 da ONU: Consumo e Produção Responsáveis.
+          </Text>
+        </View>
+
+        <View style={styles.odsSection}>
+          <SeloOds12 texto="Toque para ver todos os nossos compromissos com a ODS 12." />
+
+          <View style={styles.odsLista}>
+            <View style={styles.odsItem}>
+              <Ionicons name="reload" size={20} color={COR_ODS12} />
+              <Text style={styles.odsItemTexto}>Embalagens recicladas e recicláveis</Text>
+            </View>
+            <View style={styles.odsItem}>
+              <Ionicons name="restaurant" size={20} color={COR_ODS12} />
+              <Text style={styles.odsItemTexto}>Desperdício zero: produção em pequenas quantidades</Text>
+            </View>
+            <View style={styles.odsItem}>
+              <Ionicons name="flower" size={20} color={COR_ODS12} />
+              <Text style={styles.odsItemTexto}>Borra de café vai para a compostagem</Text>
+            </View>
+            <View style={styles.odsItem}>
+              <Ionicons name="storefront" size={20} color={COR_ODS12} />
+              <Text style={styles.odsItemTexto}>Fornecedores da região</Text>
+            </View>
+            <View style={styles.odsItem}>
+              <Ionicons name="phone-portrait" size={20} color={COR_ODS12} />
+              <Text style={styles.odsItemTexto}>Tudo pelo app, sem papel</Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.infoSection}>
@@ -183,6 +214,36 @@ const styles = criarEstilos({
     textAlign: 'center',
     lineHeight: 20,
     fontWeight: '400',
+  },
+  missionOds: {
+    fontSize: 14,
+    color: COR_ODS12,
+    textAlign: 'center',
+    fontWeight: '800',
+    marginTop: 12,
+  },
+
+  odsSection: {
+    marginHorizontal: 20,
+    marginBottom: 30,
+    gap: 12,
+  },
+  odsLista: {
+    backgroundColor: '#F6EBDD',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  odsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  odsItemTexto: {
+    flex: 1,
+    fontSize: 13,
+    color: '#2A1F17',
+    fontWeight: '600',
   },
 
   infoSection: {

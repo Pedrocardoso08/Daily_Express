@@ -10,11 +10,11 @@ const ICONES_CATEGORIA = {
     'Doces':'ice-cream'
 }
 
-// Nome de cada copo das bebidas (o U, tamanho único, não aparece)
-const NOMES_TAMANHO = {
-    'P':'200 ml',
-    'M':'300 ml',
-    'G':'400 ml'
+// ml de cada copo nos pedidos de antes de o funcionário poder escolher os ml
+const ML_PADRAO = {
+    'P':200,
+    'M':300,
+    'G':400
 }
 
 class LojaBD{
@@ -29,6 +29,22 @@ class LojaBD{
         connection.on('error', ()=>{})
         connection.connect()
         return connection
+    }
+
+    // Roda quando o servidor liga: cria as colunas de ml num banco feito antes delas existirem.
+    // Se a coluna já existe, o MySQL dá erro e ele é ignorado.
+    static prepararBanco(){
+        const connection = LojaBD.connect()
+        var colunas = [
+            'alter table produtos add column ml_p int',
+            'alter table produtos add column ml_m int',
+            'alter table produtos add column ml_g int',
+            'alter table pedido_itens add column ml int after tamanho'
+        ]
+        colunas.forEach((sql)=>{
+            connection.query(sql, ()=>{})
+        })
+        connection.end()
     }
 
     // Roda um comando SQL e já devolve a resposta para o app.
@@ -58,7 +74,7 @@ class LojaBD{
     static getProdutos(todos, callback){
         const connection = LojaBD.connect()
 
-        var sql = 'select p.id, p.nome, p.descricao_curta, p.preco, p.preco_antigo, p.imagem, p.disponivel, c.nome as categoria, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota from produtos p join categorias c on c.id = p.categoria_id where p.ativo = true'
+        var sql = 'select p.id, p.nome, p.descricao_curta, p.preco, p.preco_antigo, p.imagem, p.disponivel, p.ml_p, p.ml_m, p.ml_g, c.nome as categoria, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota from produtos p join categorias c on c.id = p.categoria_id where p.ativo = true'
 
         if(!todos){
             sql += ' and p.disponivel = true'
@@ -79,8 +95,9 @@ class LojaBD{
 
     // Cadastro e edição: tela app/funcionarios.tsx
     // Se vier produto.id, o produto que já existe é atualizado.
+    // Bebidas vêm com os ml de cada copo (mlP, mlM e mlG); o resto é tamanho único.
     static addProduto(produto, callback){
-        var {nome, descricao, categoria, preco, precoAntigo, imagem} = produto
+        var {nome, descricao, categoria, preco, precoAntigo, imagem, mlP, mlM, mlG} = produto
 
         if(!nome || !descricao || !categoria || !preco){
             return callback({'error':'Preencha nome, descrição, categoria e preço.'})
@@ -88,6 +105,17 @@ class LojaBD{
 
         if(precoAntigo && Number(precoAntigo) <= Number(preco)){
             return callback({'error':'O preço anterior precisa ser maior que o preço atual.'})
+        }
+
+        var ehBebida = categoria == 'Bebidas'
+
+        if(ehBebida){
+            if(!(mlP > 0) || !(mlM > 0) || !(mlG > 0)){
+                return callback({'error':'Preencha os ml dos três copos.'})
+            }
+            if(!(mlP < mlM && mlM < mlG)){
+                return callback({'error':'Os ml precisam crescer: pequeno < médio < grande.'})
+            }
         }
 
         if(!ICONES_CATEGORIA[categoria]){
@@ -127,7 +155,10 @@ class LojaBD{
                 descricao_curta: descricao,
                 preco: preco,
                 preco_antigo: precoAntigo ? precoAntigo : null,
-                imagem: imagem ? imagem : null
+                imagem: imagem ? imagem : null,
+                ml_p: ehBebida ? mlP : null,
+                ml_m: ehBebida ? mlM : null,
+                ml_g: ehBebida ? mlG : null
             }
 
             var sql = 'insert into produtos set ?'
@@ -322,7 +353,7 @@ class LojaBD{
 
     // Todos os pedidos de todos os clientes, do mais novo para o mais antigo
     static getPedidosLoja(callback){
-        var sql = 'select pe.id, date_format(pe.criado_em, "%d/%m/%Y") as data, date_format(pe.criado_em, "%H:%i") as hora, pe.status, pe.modo, pe.endereco_entrega, pe.forma_pagamento, pe.total, u.nome as cliente, pi.quantidade, pi.tamanho, pr.nome from pedidos pe join usuarios u on u.id = pe.usuario_id join pedido_itens pi on pi.pedido_id = pe.id join produtos pr on pr.id = pi.produto_id order by pe.id desc, pi.id'
+        var sql = 'select pe.id, date_format(pe.criado_em, "%d/%m/%Y") as data, date_format(pe.criado_em, "%H:%i") as hora, pe.status, pe.modo, pe.endereco_entrega, pe.forma_pagamento, pe.total, u.nome as cliente, pi.quantidade, pi.tamanho, pi.ml, pr.nome from pedidos pe join usuarios u on u.id = pe.usuario_id join pedido_itens pi on pi.pedido_id = pe.id join produtos pr on pr.id = pi.produto_id order by pe.id desc, pi.id'
 
         LojaBD.rodar(sql, [], (resultado)=>{
             if(resultado.error){
@@ -359,7 +390,7 @@ class LojaBD{
 
                 // Tamanho único não aparece; os copos aparecem em ml
                 if(linha.tamanho != 'U'){
-                    pedido.itens += ' (' + NOMES_TAMANHO[linha.tamanho] + ')'
+                    pedido.itens += ' (' + (linha.ml ? linha.ml : ML_PADRAO[linha.tamanho]) + ' ml)'
                 }
             })
 
@@ -367,21 +398,18 @@ class LojaBD{
         })
     }
 
-    // status: Preparando, A caminho, Finalizado ou Cancelado (o cliente vê no histórico).
-    // Cancelado: a loja fica com 30% e 70% volta para o cliente (só aparece na tela, não mexe em dinheiro).
+    // status: Preparando, A caminho ou Finalizado (o cliente vê no histórico).
+    // Cancelar é só com o cliente (ClienteBD.cancelarPedido), e pedido cancelado não muda mais.
     static mudarStatus(pedido, callback){
-        var STATUS_VALIDOS = ['Preparando', 'A caminho', 'Finalizado', 'Cancelado']
+        var STATUS_VALIDOS = ['Preparando', 'A caminho', 'Finalizado']
 
         if(!pedido.id || !STATUS_VALIDOS.includes(pedido.status)){
             return callback({'error':'Pedido ou status inválido.'})
         }
 
         var mensagem = 'Pedido #' + pedido.id + ' agora está: ' + pedido.status
-        if(pedido.status == 'Cancelado'){
-            mensagem = 'Pedido #' + pedido.id + ' cancelado. 70% do valor volta para o cliente.'
-        }
 
-        LojaBD.rodar('update pedidos set status = ? where id = ?', [pedido.status, pedido.id], callback, mensagem)
+        LojaBD.rodar("update pedidos set status = ? where id = ? and status <> 'Cancelado'", [pedido.status, pedido.id], callback, mensagem)
     }
 
     // ---------- AVISOS: aba Avisos (aparecem na aba Notificações do cliente) ----------

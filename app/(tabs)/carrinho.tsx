@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import SeloOds12 from '../../components/SeloOds12';
 import { origemImagem } from '../../lib/imagens';
 import {
   buscarCupons,
@@ -18,7 +19,7 @@ import {
   formatarPreco,
   ItemCarrinho,
   loja,
-  NOMES_TAMANHO,
+  nomeTamanho,
 } from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
  
@@ -168,6 +169,10 @@ export default function CarrinhoScreen() {
 <Ionicons name="trash-outline" size={22} color={cor('#4A3525')} />
 </TouchableOpacity>
       )}
+
+      <View style={styles.seloOds}>
+        <SeloOds12 texto="Seu pedido sai em embalagem reciclada. Peça só o que vai consumir e, se puder, traga sua caneca!" />
+      </View>
 </View>
   );
  
@@ -182,7 +187,7 @@ export default function CarrinhoScreen() {
 <Text style={styles.productName} numberOfLines={1}>{item.nome}</Text>
 <Text style={styles.productDesc} numberOfLines={1}>{item.desc}</Text>
 <View style={styles.sizeWrapper}>
-<Text style={styles.productSize}>Tamanho: {NOMES_TAMANHO[item.tamanho]}</Text>
+<Text style={styles.productSize}>Tamanho: {nomeTamanho(item.tamanho, item.ml)}</Text>
 </View>
  
         <Text style={styles.optionalLabel}>Opcional</Text>
@@ -359,6 +364,9 @@ const styles = criarEstilos({
   },
   headerPlaceholder: {
     width: 44,
+  },
+  seloOds: {
+    marginTop: 14,
   },
   clearAllBtn: {
     flexDirection: 'row',

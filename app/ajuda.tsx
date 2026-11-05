@@ -88,6 +88,15 @@ export default function AjudaScreen() {
                   Queridos Clientes, nosso menu conta com uma boa variedade de produtos sem glutém.
                 </Text>
               </View>
+
+              <TouchableOpacity style={styles.faqBox} onPress={() => router.push('/ods12')} activeOpacity={0.8}>
+                <Text style={styles.faqQuestion}>O que é a ODS 12 que a Daily Express segue?</Text>
+                <Text style={styles.faqAnswer}>
+                  É o Objetivo de Desenvolvimento Sustentável 12 da ONU: Consumo e Produção Responsáveis. Por isso usamos
+                  embalagens recicladas, evitamos desperdício, compostamos a borra de café e fazemos tudo pelo app, sem
+                  papel. Toque aqui para ver todos os nossos compromissos.
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>

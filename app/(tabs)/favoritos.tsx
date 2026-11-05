@@ -34,6 +34,9 @@ export default function FavoritosScreen() {
         preco: item.preco,
         imagem: item.imagem,
         categoria: item.categoria,
+        mlP: item.ml.P,
+        mlM: item.ml.M,
+        mlG: item.ml.G,
       },
     });
   }

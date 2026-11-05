@@ -5,8 +5,8 @@ const path = require('path')
 const ERRO_BANCO = 'Erro ao acessar o banco de dados. Confira se o MySQL está ligado.'
 
 // Tamanhos fixos do app: quanto cada um soma ao preço cadastrado.
-// P, M e G são os copos das bebidas; U é o tamanho único (doces, salgados e promoções).
-const SQL_TAMANHOS = "insert ignore into tamanhos (sigla, nome, acrescimo) values ('P', '200 ml', 0), ('M', '300 ml', 2), ('G', '400 ml', 4), ('U', 'Único', 0)"
+// P, M e G são os copos das bebidas (os ml de cada um ficam no produto); U é o tamanho único (doces, salgados e promoções).
+const SQL_TAMANHOS = "insert ignore into tamanhos (sigla, nome, acrescimo) values ('P', 'Pequeno', 0), ('M', 'Médio', 2), ('G', 'Grande', 4), ('U', 'Único', 0)"
 
 // Tudo o que é do cliente logado: pedidos, endereços, favoritos, cartões,
 // perfil (preferências e pontos) e notificações.
@@ -121,7 +121,7 @@ class ClienteBD{
     // ---------- PEDIDOS: telas pagamento e historicoPedidos ----------
 
     static getPedidos(usuario, callback){
-        var sql = 'select pe.id, date_format(pe.criado_em, "%d/%m/%Y") as data, pe.status, pe.modo, pe.endereco_entrega, pe.total, pi.id as item_id, pi.produto_id, pi.tamanho, pi.opcional, pi.quantidade, pi.preco_unitario, pr.nome, pr.descricao_curta, pr.imagem from pedidos pe join pedido_itens pi on pi.pedido_id = pe.id join produtos pr on pr.id = pi.produto_id where pe.usuario_id = ? order by pe.id desc, pi.id'
+        var sql = 'select pe.id, date_format(pe.criado_em, "%d/%m/%Y") as data, pe.status, pe.modo, pe.endereco_entrega, pe.total, pi.id as item_id, pi.produto_id, pi.tamanho, pi.ml, pi.opcional, pi.quantidade, pi.preco_unitario, pr.nome, pr.descricao_curta, pr.imagem from pedidos pe join pedido_itens pi on pi.pedido_id = pe.id join produtos pr on pr.id = pi.produto_id where pe.usuario_id = ? order by pe.id desc, pi.id'
 
         ClienteBD.rodar(sql, usuario, (resultado)=>{
             if(resultado.error){
@@ -153,6 +153,7 @@ class ClienteBD{
                     nome: linha.nome,
                     desc: linha.descricao_curta,
                     tamanho: linha.tamanho,
+                    ml: linha.ml,
                     opcional: linha.opcional,
                     precoUnitario: Number(linha.preco_unitario),
                     qtd: linha.quantidade,
@@ -196,10 +197,11 @@ class ClienteBD{
 
             // O carrinho do app guarda o nome do produto, então o id é achado pelo nome
             // (se um produto removido tiver o mesmo nome, o ativo vem primeiro)
-            var sqlItem = 'insert into pedido_itens (pedido_id, produto_id, tamanho, opcional, quantidade, preco_unitario) select ?, id, ?, ?, ?, ? from produtos where nome = ? order by ativo desc limit 1'
+            // O ml do copo fica salvo no item, para o histórico não mudar se o funcionário trocar depois
+            var sqlItem = 'insert into pedido_itens (pedido_id, produto_id, tamanho, ml, opcional, quantidade, preco_unitario) select ?, id, ?, ?, ?, ?, ? from produtos where nome = ? order by ativo desc limit 1'
 
             dados.itens.forEach((item)=>{
-                connection.query(sqlItem, [pedidoId, item.tamanho, item.opcional, item.qtd, item.precoUnitario, item.nome])
+                connection.query(sqlItem, [pedidoId, item.tamanho, item.ml ? item.ml : null, item.opcional, item.qtd, item.precoUnitario, item.nome])
             })
 
             // Cada cliente usa cada cupom uma vez só
@@ -215,6 +217,26 @@ class ClienteBD{
             // O end() espera os comandos de cima terminarem antes de fechar
             connection.end()
             callback({'message':'Pedido salvo!', 'pontos':pontos})
+        })
+    }
+
+    // Só o dono do pedido cancela, e só enquanto ele está Preparando ou A caminho.
+    // A loja fica com 30% e 70% volta para o cliente (só aparece na tela, não mexe em dinheiro).
+    static cancelarPedido(dados, callback){
+        if(!dados.usuario || !dados.id){
+            return callback({'error':'Pedido inválido.'})
+        }
+
+        var sql = "update pedidos set status = 'Cancelado' where id = ? and usuario_id = ? and status in ('Preparando', 'A caminho')"
+
+        ClienteBD.rodar(sql, [dados.id, dados.usuario], (resultado)=>{
+            if(resultado.error){
+                return callback(resultado)
+            }
+            if(resultado.affectedRows == 0){
+                return callback({'error':'Esse pedido não pode mais ser cancelado.'})
+            }
+            callback({'message':'Pedido #' + dados.id + ' cancelado. 70% do valor volta para você.'})
         })
     }
 
@@ -295,7 +317,7 @@ class ClienteBD{
     // ---------- FAVORITOS: coração do menu e do produto, aba favoritos ----------
 
     static getFavoritos(usuario, callback){
-        var sql = 'select distinct p.id, p.nome, p.descricao_curta, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota, p.preco, p.imagem, c.nome as categoria from favoritos f join produtos p on p.id = f.produto_id join categorias c on c.id = p.categoria_id where f.usuario_id = ? and f.ativo = true and p.ativo = true and p.disponivel = true'
+        var sql = 'select distinct p.id, p.nome, p.descricao_curta, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota, p.preco, p.imagem, p.ml_p, p.ml_m, p.ml_g, c.nome as categoria from favoritos f join produtos p on p.id = f.produto_id join categorias c on c.id = p.categoria_id where f.usuario_id = ? and f.ativo = true and p.ativo = true and p.disponivel = true'
         ClienteBD.rodar(sql, usuario, callback)
     }
 

@@ -7,7 +7,8 @@ import { fundo, TemaProvider, useTema } from '../lib/tema';
 
 // Páginas que podem ser abertas sem estar logado.
 // Funcionários tem o próprio código de acesso, então não volta para o login.
-const PAGINAS_PUBLICAS = ['/login', '/cadastro', '/esqueciSenha', '/novaSenha', '/funcionarios'];
+// A página da ODS 12 abre pelo selo da tela de login.
+const PAGINAS_PUBLICAS = ['/login', '/cadastro', '/esqueciSenha', '/novaSenha', '/funcionarios', '/ods12'];
 
 export default function RootLayout() {
   return (
@@ -69,6 +70,7 @@ function Navegacao() {
         <Stack.Screen name="cadastro" options={{ title: 'Criar conta' }} />
         <Stack.Screen name="esqueciSenha" options={{ title: 'Esqueci a senha' }} />
         <Stack.Screen name="novaSenha" options={{ title: 'Nova senha' }} />
+        <Stack.Screen name="pedidosAtivos" options={{ title: 'Pedidos ativos' }} />
         <Stack.Screen name="historicoPedidos" options={{ title: 'Histórico de pedidos' }} />
         <Stack.Screen name="cupons" options={{ title: 'Cupons' }} />
         <Stack.Screen name="funcionarios" options={{ title: 'Área do funcionário' }} />
@@ -76,6 +78,7 @@ function Navegacao() {
         <Stack.Screen name="ajuda" options={{ title: 'Ajuda' }} />
         <Stack.Screen name="faleconosco" options={{ title: 'Fale conosco' }} />
         <Stack.Screen name="sobrenos" options={{ title: 'Sobre nós' }} />
+        <Stack.Screen name="ods12" options={{ title: 'Nossa ODS 12' }} />
         <Stack.Screen name="produto" options={{ title: 'Produto' }} />
         <Stack.Screen name="fidelidade" options={{ title: 'Fidelidade' }} />
         <Stack.Screen name="personalizacao" options={{ title: 'Personalização' }} />

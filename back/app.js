@@ -131,6 +131,8 @@ const callback = (req, res)=>{
                 ClienteBD.salvarFoto(dados, resposta)
             }else if(rota.pathname == '/pedido'){
                 ClienteBD.addPedido(dados, resposta)
+            }else if(rota.pathname == '/cancelarPedido'){
+                ClienteBD.cancelarPedido(dados, resposta)
             }else if(rota.pathname == '/endereco'){
                 ClienteBD.addEndereco(dados, resposta)
             }else if(rota.pathname == '/removerEndereco'){
@@ -157,5 +159,7 @@ const callback = (req, res)=>{
 }
 
 const server = http.createServer(callback)
+
+LojaBD.prepararBanco()
 
 server.listen(3000,()=>{console.log('Servidor rodando em http://localhost:3000')})
