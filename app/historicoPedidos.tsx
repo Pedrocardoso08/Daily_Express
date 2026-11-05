@@ -9,8 +9,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { buscar, enviar } from '../lib/api';
 import { estiloLogo, logo, origemImagem } from '../lib/imagens';
-import { adicionarAoCarrinho, buscarPedidos, formatarPreco, loja, NOMES_TAMANHO, Pedido } from '../lib/loja';
+import {
+  adicionarAoCarrinho,
+  buscarPedidos,
+  formatarPreco,
+  idUsuario,
+  ItemCarrinho,
+  loja,
+  NOMES_TAMANHO,
+  Pedido,
+} from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function HistoricoPedidosScreen() {
@@ -27,13 +37,47 @@ export default function HistoricoPedidosScreen() {
 
   const [busca, setBusca] = useState('');
   const [pedidos, setPedidos] = useState<Pedido[]>([...loja.pedidos]);
+  // Notas que o cliente já deu, pelo id do produto. Ex.: { '3': 5, '7': 2 }
+  const [notas, setNotas] = useState<any>({});
+  const [aviso, setAviso] = useState('');
 
-  // Toda vez que a tela aparece, lê os pedidos do banco
+  // Toda vez que a tela aparece, lê os pedidos e as avaliações do banco
   useFocusEffect(
     useCallback(() => {
       buscarPedidos().then((lista) => setPedidos(lista));
+      buscar('/avaliacoes?usuario=' + idUsuario())
+        .then((lista) => {
+          if (!Array.isArray(lista)) {
+            return;
+          }
+          const novasNotas: any = {};
+          lista.forEach((item) => {
+            novasNotas[String(item.produto_id)] = item.nota;
+          });
+          setNotas(novasNotas);
+        })
+        .catch(() => {});
     }, [])
   );
+
+  // Toque numa estrela = essa nota. Tocar de novo na mesma estrela tira uma (assim dá para dar 0).
+  function avaliar(produto: ItemCarrinho, estrela: number) {
+    if (!produto.produtoId) {
+      return;
+    }
+    const nota = notas[produto.produtoId] === estrela ? estrela - 1 : estrela;
+
+    setNotas({ ...notas, [produto.produtoId]: nota });
+    setAviso('');
+
+    enviar('/avaliacao', { usuario: idUsuario(), produto: produto.produtoId, nota: nota })
+      .then((resposta) => {
+        setAviso(resposta.error ? resposta.error : 'Você deu ' + nota + ' de 5 para ' + produto.nome + '.');
+      })
+      .catch(() => {
+        setAviso('Não foi possível salvar a avaliação.');
+      });
+  }
 
   // Mostra só os pedidos que têm algum produto com o nome pesquisado
   const pedidosFiltrados = pedidos.filter((pedido) =>
@@ -86,6 +130,9 @@ export default function HistoricoPedidosScreen() {
           />
         </View>
       </View>
+
+      <Text style={styles.dicaAvaliar}>Toque nas estrelas para avaliar o que você pediu.</Text>
+      {aviso !== '' ? <Text style={styles.avisoAvaliar}>{aviso}</Text> : null}
     </View>
   );
 
@@ -94,17 +141,37 @@ export default function HistoricoPedidosScreen() {
       <Text style={styles.orderTitle}>Pedido do dia  {item.data}</Text>
 
       <View style={styles.statusRow}>
-        <Ionicons name="checkmark" size={18} color={cor('#4A3525')} />
+        <Ionicons name={item.status === 'Cancelado' ? 'close' : 'checkmark'} size={18} color={cor('#4A3525')} />
         <Text style={styles.statusText}>{item.status}</Text>
       </View>
+      {item.status === 'Cancelado' ? (
+        <Text style={styles.canceladoText}>
+          Pedido cancelado pela loja. {formatarPreco(item.total * 0.7)} (70% do valor) será devolvido.
+        </Text>
+      ) : null}
 
       <View style={styles.itemsList}>
         {item.itens.map((prod) => (
           <View key={prod.id} style={styles.productRow}>
             <Image source={origemImagem(prod.imagem, prod.nome)} style={styles.productImage} />
-            <Text style={styles.productName}>
-              {prod.qtd}x {prod.nome} ({NOMES_TAMANHO[prod.tamanho]})
-            </Text>
+            <View style={styles.productInfo}>
+              <Text style={styles.productName}>
+                {prod.qtd}x {prod.nome} ({NOMES_TAMANHO[prod.tamanho]})
+              </Text>
+              {prod.produtoId ? (
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((estrela) => (
+                    <TouchableOpacity key={estrela} onPress={() => avaliar(prod, estrela)} hitSlop={4}>
+                      <Ionicons
+                        name={notas[prod.produtoId as string] >= estrela ? 'star' : 'star-outline'}
+                        size={20}
+                        color={cor('#4A3525')}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+            </View>
           </View>
         ))}
       </View>
@@ -231,6 +298,14 @@ const styles = criarEstilos({
     color: '#4A3525',
     fontWeight: '500',
   },
+  canceladoText: {
+    fontSize: 13,
+    color: '#8B2E2E',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: -12,
+    marginBottom: 16,
+  },
   itemsList: {
     gap: 14,
     marginBottom: 22,
@@ -240,11 +315,33 @@ const styles = criarEstilos({
     alignItems: 'center',
     gap: 12,
   },
-  productName: {
+  productInfo: {
     flex: 1,
+    gap: 4,
+  },
+  productName: {
     fontSize: 14,
     color: '#4A3525',
     fontWeight: '500',
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  dicaAvaliar: {
+    marginTop: 14,
+    marginHorizontal: 20,
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#4A3525',
+  },
+  avisoAvaliar: {
+    marginTop: 6,
+    marginHorizontal: 20,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2E5A32',
   },
   productImage: {
     width: 32,

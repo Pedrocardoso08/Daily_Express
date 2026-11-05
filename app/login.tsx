@@ -140,6 +140,11 @@ export default function LoginScreen() {
             <Text style={styles.registerLink}>Criar conta</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity style={styles.funcionarioBotao} onPress={() => router.push('/funcionarios')}>
+          <Ionicons name="briefcase-outline" size={16} color={cor('#4A3525')} />
+          <Text style={styles.funcionarioTexto}>Área do funcionário</Text>
+        </TouchableOpacity>
       </View>
 
     </View>
@@ -241,6 +246,18 @@ const styles = criarEstilos({
     color: '#1A1A1A',
     fontSize: 14,
     fontWeight: 'bold',
+    textDecorationLine: 'underline',
+  },
+  funcionarioBotao: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 24,
+  },
+  funcionarioTexto: {
+    color: '#4A3525',
+    fontSize: 13,
     textDecorationLine: 'underline',
   },
   sucesso: {

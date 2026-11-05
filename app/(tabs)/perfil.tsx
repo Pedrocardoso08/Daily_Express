@@ -139,17 +139,6 @@ export default function PerfilScreen() {
                 style={styles.sidebarItem}
                 onPress={() => {
                   setMenuAberto(false);
-                  router.push('/funcionarios');
-                }}
-              >
-                <Ionicons name="briefcase-outline" size={22} color={cor('#4A3525')} />
-                <Text style={styles.sidebarItemText}>Área do funcionário</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.sidebarItem}
-                onPress={() => {
-                  setMenuAberto(false);
                   router.push('/historicoPedidos');
                 }}
               >

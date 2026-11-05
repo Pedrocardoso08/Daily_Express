@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Text,
@@ -11,8 +12,9 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { API } from '../lib/api';
+import { buscar, enviar } from '../lib/api';
 import { estiloLogo, logo, origemImagem } from '../lib/imagens';
 import {
   buscarCupons,
@@ -20,15 +22,55 @@ import {
   CategoriaProduto,
   CODIGO_FUNCIONARIO,
   CupomLoja,
+  dataDeHoje,
+  formatarData,
   formatarPreco,
   loja,
   ProdutoCatalogo,
+  soNumeros,
+  soNumerosComVirgula,
 } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 const CATEGORIAS: CategoriaProduto[] = ['Promoção', 'Bebidas', 'Salgados', 'Doces'];
 
-type Aba = 'produtos' | 'cupons';
+type Aba = 'pedidos' | 'produtos' | 'cupons' | 'avisos' | 'premios';
+
+const ABAS: { id: Aba; titulo: string }[] = [
+  { id: 'pedidos', titulo: 'Pedidos' },
+  { id: 'produtos', titulo: 'Produtos' },
+  { id: 'cupons', titulo: 'Cupons' },
+  { id: 'avisos', titulo: 'Avisos' },
+  { id: 'premios', titulo: 'Prêmios' },
+];
+
+// Os passos do pedido em andamento. O cliente vê o mesmo texto no histórico.
+// Depois disso o pedido é fechado com os botões Finalizar ou Cancelar.
+const STATUS_PEDIDO = ['Preparando', 'A caminho'];
+const FILTROS_PEDIDO = ['Todos', 'Preparando', 'A caminho', 'Finalizado', 'Cancelado'];
+
+// Ícones que dá para escolher no aviso (nomes do Ionicons)
+const ICONES_AVISO = ['notifications', 'gift', 'cafe', 'time', 'megaphone', 'star'];
+
+const ERRO_SERVIDOR = 'Não foi possível conectar ao servidor. Confira se o back-end e o MySQL estão ligados.';
+
+// Pedido como vem da rota /pedidosLoja (os itens já vêm num texto só)
+type PedidoLoja = {
+  id: string;
+  data: string;
+  hora: string;
+  status: string;
+  modo: string;
+  endereco: string;
+  pagamento: string;
+  total: number;
+  cliente: string;
+  itens: string;
+};
+
+type Aviso = { id: number; titulo: string; descricao: string; icone: any };
+
+type Recompensa = { id: number; nome: string; pontos: number };
 
 function voltarPara(router: any) {
   if (router.canGoBack()) {
@@ -68,27 +110,54 @@ function confirmar(titulo: string, mensagem: string, aoConfirmar: () => void) {
 export default function FuncionariosScreen() {
   useTema();
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
   const [liberado, setLiberado] = useState(loja.acessoFuncionario);
   const [codigoAcesso, setCodigoAcesso] = useState('');
   const [erroAcesso, setErroAcesso] = useState('');
 
-  const [aba, setAba] = useState<Aba>('produtos');
+  const [aba, setAba] = useState<Aba>('pedidos');
+  // Toda vez que esse número muda, as listas são lidas de novo do banco
+  const [recarregar, setRecarregar] = useState(0);
+
+  const [pedidos, setPedidos] = useState<PedidoLoja[]>([]);
+  const [filtroStatus, setFiltroStatus] = useState('Todos');
+
+  // Caixa de cancelar pedido: aberta quando "cancelando" tem um pedido
+  const [cancelando, setCancelando] = useState<PedidoLoja | null>(null);
+  const [codigoCancelar, setCodigoCancelar] = useState('');
+  const [codigoDigitado, setCodigoDigitado] = useState('');
+  const [erroCancelar, setErroCancelar] = useState('');
   const [produtos, setProdutos] = useState<ProdutoCatalogo[]>([...loja.produtos]);
   const [cupons, setCupons] = useState<CupomLoja[]>([...loja.cupons]);
+  const [avisos, setAvisos] = useState<Aviso[]>([]);
+  const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
 
+  // Formulário de produto. editandoId vazio = produto novo.
+  const [editandoId, setEditandoId] = useState('');
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [categoria, setCategoria] = useState<CategoriaProduto>('Bebidas');
   const [preco, setPreco] = useState('');
   const [precoAntigo, setPrecoAntigo] = useState('');
-  const [nota, setNota] = useState('');
+  // Link (http...) ou caminho da imagem enviada da galeria (fotos/produto_...jpg)
   const [imagem, setImagem] = useState('');
 
+  // Formulário de cupom
   const [codigo, setCodigo] = useState('');
   const [titulo, setTitulo] = useState('');
   const [descricaoCupom, setDescricaoCupom] = useState('');
   const [tipo, setTipo] = useState<'porcentagem' | 'valor'>('porcentagem');
   const [valorCupom, setValorCupom] = useState('');
+  const [validade, setValidade] = useState('');
+
+  // Formulário de aviso
+  const [tituloAviso, setTituloAviso] = useState('');
+  const [descricaoAviso, setDescricaoAviso] = useState('');
+  const [iconeAviso, setIconeAviso] = useState('notifications');
+
+  // Formulário de prêmio
+  const [nomePremio, setNomePremio] = useState('');
+  const [pontosPremio, setPontosPremio] = useState('');
 
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
@@ -98,9 +167,31 @@ export default function FuncionariosScreen() {
     if (!liberado) {
       return;
     }
-    buscarProdutos().then((lista) => setProdutos(lista));
+    buscarProdutos(true).then((lista) => setProdutos(lista));
     buscarCupons(false).then((lista) => setCupons(lista));
-  }, [liberado]);
+    buscar('/pedidosLoja')
+      .then((lista) => {
+        if (Array.isArray(lista)) {
+          setPedidos(lista);
+        }
+      })
+      .catch(() => {});
+    // usuario=0 é só para a rota funcionar sem cliente logado
+    buscar('/notificacoes?usuario=0')
+      .then((lista) => {
+        if (Array.isArray(lista)) {
+          setAvisos(lista);
+        }
+      })
+      .catch(() => {});
+    buscar('/recompensas')
+      .then((lista) => {
+        if (Array.isArray(lista)) {
+          setRecompensas(lista);
+        }
+      })
+      .catch(() => {});
+  }, [liberado, recarregar]);
 
   function entrar() {
     if (codigoAcesso.trim().toUpperCase() !== CODIGO_FUNCIONARIO) {
@@ -115,6 +206,125 @@ export default function FuncionariosScreen() {
   function limparAvisos() {
     setErro('');
     setSucesso('');
+  }
+
+  function trocarAba(nova: Aba) {
+    setAba(nova);
+    limparAvisos();
+  }
+
+  // Manda os dados para o back-end, mostra a resposta e lê as listas de novo.
+  // aoDarCerto roda só se o back-end não devolver erro (ex.: limpar o formulário).
+  function mandar(rota: string, dados: any, aoDarCerto?: () => void) {
+    limparAvisos();
+    setCarregando(true);
+
+    enviar(rota, dados)
+      .then((resposta) => {
+        setCarregando(false);
+
+        if (resposta.error) {
+          setErro(resposta.error);
+          return;
+        }
+
+        setSucesso(resposta.message);
+        if (aoDarCerto) {
+          aoDarCerto();
+        }
+        setRecarregar(recarregar + 1);
+      })
+      .catch(() => {
+        setCarregando(false);
+        setErro(ERRO_SERVIDOR);
+      });
+  }
+
+  // ---------- PEDIDOS ----------
+
+  function mudarStatus(pedido: PedidoLoja, status: string) {
+    mandar('/statusPedido', { id: pedido.id, status: status });
+  }
+
+  // Abre a caixa com um código novo de 3 dígitos (de 100 a 999)
+  function abrirCancelamento(pedido: PedidoLoja) {
+    setCancelando(pedido);
+    setCodigoCancelar(String(Math.floor(100 + Math.random() * 900)));
+    setCodigoDigitado('');
+    setErroCancelar('');
+  }
+
+  function confirmarCancelamento() {
+    if (!cancelando) {
+      return;
+    }
+    if (codigoDigitado !== codigoCancelar) {
+      setErroCancelar('Código errado. Digite ' + codigoCancelar + ' para confirmar.');
+      return;
+    }
+    mudarStatus(cancelando, 'Cancelado');
+    setCancelando(null);
+  }
+
+  // ---------- PRODUTOS ----------
+
+  function limparProduto() {
+    setEditandoId('');
+    setNome('');
+    setDescricao('');
+    setCategoria('Bebidas');
+    setPreco('');
+    setPrecoAntigo('');
+    setImagem('');
+  }
+
+  // Abre a galeria (no navegador, a janela de escolher arquivo) e manda a imagem para o back-end
+  function escolherImagem() {
+    ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    }).then((resultado) => {
+      if (resultado.canceled) {
+        return;
+      }
+
+      // No celular a imagem vem em "base64"; no navegador ela já vem dentro do "uri"
+      const arquivo = resultado.assets[0].base64 ? resultado.assets[0].base64 : resultado.assets[0].uri;
+
+      limparAvisos();
+      setCarregando(true);
+
+      enviar('/fotoProduto', { imagem: arquivo })
+        .then((resposta) => {
+          setCarregando(false);
+          if (resposta.error) {
+            setErro(resposta.error);
+            return;
+          }
+          setImagem(resposta.foto);
+          setSucesso('Imagem enviada! Agora é só salvar o produto.');
+        })
+        .catch(() => {
+          setCarregando(false);
+          setErro(ERRO_SERVIDOR);
+        });
+    });
+  }
+
+  // Coloca os dados do produto no formulário e sobe a tela até ele
+  function editarProduto(item: ProdutoCatalogo) {
+    limparAvisos();
+    setEditandoId(item.id);
+    setNome(item.nome);
+    setDescricao(item.desc);
+    setCategoria(item.categoria);
+    setPreco(item.precoNovo);
+    setPrecoAntigo(item.precoAntigo);
+    setImagem(item.imagem);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
   function salvarProduto() {
@@ -145,62 +355,38 @@ export default function FuncionariosScreen() {
       antigo = formatarCampoPreco(antigoNumero);
     }
 
-    let notaFinal = '5.0';
-    if (nota.trim() !== '') {
-      const notaNumero = lerNumero(nota);
-      if (notaNumero === null || notaNumero < 0 || notaNumero > 5) {
-        setErro('A nota fica entre 0 e 5.');
-        return;
-      }
-      notaFinal = notaNumero.toFixed(1);
-    }
-
     const link = imagem.trim();
-    if (link !== '' && !link.startsWith('http')) {
+    if (link !== '' && !link.startsWith('http') && !link.startsWith('fotos/')) {
       setErro('O link da imagem precisa começar com http.');
       return;
     }
 
-    setCarregando(true);
-
-    fetch(API + '/produto', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    mandar(
+      '/produto',
+      {
+        id: editandoId === '' ? null : editandoId,
         nome: nome.trim(),
         descricao: descricao.trim(),
         categoria: categoria,
         preco: precoNumero,
         precoAntigo: antigo === '' ? null : lerNumero(antigo),
-        nota: Number(notaFinal),
         imagem: link === '' ? null : link,
-      }),
-    })
-      .then((response) => response.json())
-      .then((dados) => {
-        setCarregando(false);
-
-        if (dados.error) {
-          setErro(dados.error);
-          return;
-        }
-
-        setNome('');
-        setDescricao('');
-        setPreco('');
-        setPrecoAntigo('');
-        setNota('');
-        setImagem('');
-        setSucesso('Produto cadastrado na loja.');
-        buscarProdutos().then((lista) => setProdutos(lista));
-      })
-      .catch(() => {
-        setCarregando(false);
-        setErro('Não foi possível conectar ao servidor. Confira se o back-end e o MySQL estão ligados.');
-      });
+      },
+      limparProduto
+    );
   }
+
+  function mudarDisponivel(item: ProdutoCatalogo) {
+    mandar('/disponivel', { id: item.id, disponivel: item.disponivel === false });
+  }
+
+  function pedirRemocaoProduto(item: ProdutoCatalogo) {
+    confirmar('Remover produto', 'Tirar "' + item.nome + '" da loja?', () => {
+      mandar('/removerProduto', { id: item.id });
+    });
+  }
+
+  // ---------- CUPONS ----------
 
   function salvarCupom() {
     limparAvisos();
@@ -220,88 +406,94 @@ export default function FuncionariosScreen() {
       return;
     }
 
-    setCarregando(true);
+    // Digitada como 31/12/2026, vai para o banco como 2026-12-31
+    let dataBanco = '';
+    if (validade.trim() !== '') {
+      const partes = validade.trim().split('/');
+      if (partes.length !== 3 || partes[0].length !== 2 || partes[1].length !== 2 || partes[2].length !== 4) {
+        setErro('Digite a validade assim: 31/12/2026.');
+        return;
+      }
+      dataBanco = partes[2] + '-' + partes[1] + '-' + partes[0];
+    }
 
-    fetch(API + '/cupom', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    mandar(
+      '/cupom',
+      {
         codigo: codigo.trim(),
         titulo: titulo.trim(),
         descricao: descricaoCupom.trim(),
         tipo: tipo,
         valor: valor,
-      }),
-    })
-      .then((response) => response.json())
-      .then((dados) => {
-        setCarregando(false);
-
-        if (dados.error) {
-          setErro(dados.error);
-          return;
-        }
-
+        validade: dataBanco === '' ? null : dataBanco,
+      },
+      () => {
         setCodigo('');
         setTitulo('');
         setDescricaoCupom('');
         setValorCupom('');
-        setSucesso('Cupom cadastrado na loja.');
-        buscarCupons(false).then((lista) => setCupons(lista));
-      })
-      .catch(() => {
-        setCarregando(false);
-        setErro('Não foi possível conectar ao servidor. Confira se o back-end e o MySQL estão ligados.');
-      });
-  }
-
-  function pedirRemocaoProduto(item: ProdutoCatalogo) {
-    confirmar('Remover produto', 'Tirar "' + item.nome + '" da loja?', () => {
-      fetch(API + '/removerProduto', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id: item.id }),
-      })
-        .then((response) => response.json())
-        .then((dados) => {
-          if (dados.error) {
-            setErro(dados.error);
-            return;
-          }
-          limparAvisos();
-          buscarProdutos().then((lista) => setProdutos(lista));
-        })
-        .catch(() => {
-          setErro('Não foi possível conectar ao servidor. Confira se o back-end e o MySQL estão ligados.');
-        });
-    });
+        setValidade('');
+      }
+    );
   }
 
   function pedirRemocaoCupom(item: CupomLoja) {
     confirmar('Remover cupom', 'Tirar o cupom ' + item.codigo + ' da loja?', () => {
-      fetch(API + '/removerCupom', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id: item.id }),
-      })
-        .then((response) => response.json())
-        .then((dados) => {
-          if (dados.error) {
-            setErro(dados.error);
-            return;
-          }
-          limparAvisos();
-          buscarCupons(false).then((lista) => setCupons(lista));
-        })
-        .catch(() => {
-          setErro('Não foi possível conectar ao servidor. Confira se o back-end e o MySQL estão ligados.');
-        });
+      mandar('/removerCupom', { id: item.id });
+    });
+  }
+
+  // ---------- AVISOS ----------
+
+  function salvarAviso() {
+    limparAvisos();
+
+    if (tituloAviso.trim() === '' || descricaoAviso.trim() === '') {
+      setErro('Preencha título e mensagem.');
+      return;
+    }
+
+    mandar(
+      '/notificacao',
+      { titulo: tituloAviso.trim(), descricao: descricaoAviso.trim(), icone: iconeAviso },
+      () => {
+        setTituloAviso('');
+        setDescricaoAviso('');
+        setIconeAviso('notifications');
+      }
+    );
+  }
+
+  function pedirRemocaoAviso(item: Aviso) {
+    confirmar('Remover aviso', 'Tirar o aviso "' + item.titulo + '"?', () => {
+      mandar('/removerNotificacao', { id: item.id });
+    });
+  }
+
+  // ---------- PRÊMIOS ----------
+
+  function salvarPremio() {
+    limparAvisos();
+
+    const pontos = Number(pontosPremio.trim());
+    if (nomePremio.trim() === '' || pontosPremio.trim() === '') {
+      setErro('Preencha o nome e os pontos.');
+      return;
+    }
+    if (!Number.isInteger(pontos) || pontos <= 0) {
+      setErro('Os pontos precisam ser um número inteiro maior que zero.');
+      return;
+    }
+
+    mandar('/recompensa', { nome: nomePremio.trim(), pontos: pontos }, () => {
+      setNomePremio('');
+      setPontosPremio('');
+    });
+  }
+
+  function pedirRemocaoPremio(item: Recompensa) {
+    confirmar('Remover prêmio', 'Tirar o prêmio "' + item.nome + '"?', () => {
+      mandar('/removerRecompensa', { id: item.id });
     });
   }
 
@@ -313,7 +505,7 @@ export default function FuncionariosScreen() {
           <Ionicons name="lock-closed" size={36} color={cor('#4A3525')} style={styles.acessoIcone} />
           <Text style={styles.acessoTitulo}>Área restrita</Text>
           <Text style={styles.acessoTexto}>
-            Digite o código de funcionário para cadastrar produtos e cupons.
+            Digite o código de funcionário para cuidar dos pedidos, produtos, cupons, avisos e prêmios.
           </Text>
           <TextInput
             style={[styles.campo, styles.acessoCampo]}
@@ -333,167 +525,248 @@ export default function FuncionariosScreen() {
     );
   }
 
+  // Resumo do dia: conta os pedidos com a data de hoje (os cancelados não entram)
+  const hoje = dataDeHoje();
+  let pedidosHoje = 0;
+  let vendidoHoje = 0;
+  let emPreparo = 0;
+  pedidos.forEach((pedido) => {
+    if (pedido.data === hoje && pedido.status !== 'Cancelado') {
+      pedidosHoje = pedidosHoje + 1;
+      vendidoHoje = vendidoHoje + pedido.total;
+    }
+    if (pedido.status === 'Preparando') {
+      emPreparo = emPreparo + 1;
+    }
+  });
+
+  const pedidosFiltrados = pedidos.filter(
+    (pedido) => filtroStatus === 'Todos' || pedido.status === filtroStatus
+  );
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <Cabecalho titulo="Funcionários" onVoltar={() => voltarPara(router)} />
 
         <Text style={styles.aviso}>
           O que você cadastrar aqui é gravado no banco e aparece na loja.
         </Text>
 
+        <View style={styles.resumo}>
+          <View style={styles.resumoItem}>
+            <Text style={styles.resumoNumero}>{pedidosHoje}</Text>
+            <Text style={styles.resumoTexto}>pedidos hoje</Text>
+          </View>
+          <View style={styles.resumoItem}>
+            <Text style={styles.resumoNumero}>{formatarPreco(vendidoHoje)}</Text>
+            <Text style={styles.resumoTexto}>vendido hoje</Text>
+          </View>
+          <View style={styles.resumoItem}>
+            <Text style={styles.resumoNumero}>{emPreparo}</Text>
+            <Text style={styles.resumoTexto}>em preparo</Text>
+          </View>
+        </View>
+
         <View style={styles.abas}>
-          <TouchableOpacity
-            style={[styles.aba, aba === 'produtos' && styles.abaAtiva]}
-            onPress={() => {
-              setAba('produtos');
-              limparAvisos();
-            }}
-          >
-            <Text style={[styles.abaTexto, aba === 'produtos' && styles.abaTextoAtivo]}>Produtos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.aba, aba === 'cupons' && styles.abaAtiva]}
-            onPress={() => {
-              setAba('cupons');
-              limparAvisos();
-            }}
-          >
-            <Text style={[styles.abaTexto, aba === 'cupons' && styles.abaTextoAtivo]}>Cupons</Text>
-          </TouchableOpacity>
+          {ABAS.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.aba, aba === item.id && styles.abaAtiva]}
+              onPress={() => trocarAba(item.id)}
+            >
+              <Text style={[styles.abaTexto, aba === item.id && styles.abaTextoAtivo]}>{item.titulo}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {erro !== '' ? <Text style={styles.erro}>{erro}</Text> : null}
         {sucesso !== '' ? <Text style={styles.sucesso}>{sucesso}</Text> : null}
 
-        {aba === 'produtos' ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitulo}>Novo produto</Text>
-            <Campo rotulo="Nome" value={nome} onChangeText={setNome} placeholder="Ex.: Affogato" />
-            <Campo
-              rotulo="Descrição"
-              value={descricao}
-              onChangeText={setDescricao}
-              placeholder="Descrição curta"
-              multiline
-            />
-            <Text style={styles.rotulo}>Categoria</Text>
-            <View style={styles.chips}>
-              {CATEGORIAS.map((item) => (
+        {/* ---------- ABA PEDIDOS ---------- */}
+        {aba === 'pedidos' ? (
+          <View>
+            <View style={[styles.chips, styles.filtros]}>
+              {FILTROS_PEDIDO.map((item) => (
                 <TouchableOpacity
                   key={item}
-                  style={[styles.chip, categoria === item && styles.chipAtivo]}
-                  onPress={() => setCategoria(item)}
+                  style={[styles.chip, filtroStatus === item && styles.chipAtivo]}
+                  onPress={() => setFiltroStatus(item)}
                 >
-                  <Text style={[styles.chipTexto, categoria === item && styles.chipTextoAtivo]}>
-                    {item}
-                  </Text>
+                  <Text style={[styles.chipTexto, filtroStatus === item && styles.chipTextoAtivo]}>{item}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <Campo
-              rotulo="Preço (R$)"
-              value={preco}
-              onChangeText={setPreco}
-              placeholder="13,90"
-              keyboardType="decimal-pad"
-            />
-            <Campo
-              rotulo="Preço anterior (opcional)"
-              value={precoAntigo}
-              onChangeText={setPrecoAntigo}
-              placeholder="18,90"
-              keyboardType="decimal-pad"
-            />
-            <Campo
-              rotulo="Nota de 0 a 5 (opcional)"
-              value={nota}
-              onChangeText={setNota}
-              placeholder="4.8"
-              keyboardType="decimal-pad"
-            />
-            <Campo
-              rotulo="Link da imagem (opcional)"
-              value={imagem}
-              onChangeText={setImagem}
-              placeholder="https://..."
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TouchableOpacity
-              style={[styles.botao, carregando && styles.botaoDesativado]}
-              onPress={salvarProduto}
-              disabled={carregando}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.botaoTexto}>{carregando ? 'Salvando...' : 'Cadastrar produto'}</Text>
+
+            <TouchableOpacity style={styles.atualizar} onPress={() => setRecarregar(recarregar + 1)}>
+              <Ionicons name="refresh" size={18} color={cor('#4A3525')} />
+              <Text style={styles.atualizarTexto}>Atualizar lista</Text>
             </TouchableOpacity>
+
+            {pedidosFiltrados.length === 0 ? <Text style={styles.vazio}>Nenhum pedido por aqui.</Text> : null}
+
+            {pedidosFiltrados.map((pedido) => (
+              <View key={pedido.id} style={styles.pedido}>
+                <Text style={styles.itemNome}>
+                  Pedido #{pedido.id} · {pedido.cliente}
+                </Text>
+                <Text style={styles.itemDetalhe}>
+                  {pedido.data} às {pedido.hora} · {pedido.modo} · {pedido.pagamento}
+                </Text>
+                <Text style={styles.pedidoItens}>{pedido.itens}</Text>
+                {pedido.endereco !== '' ? (
+                  <Text style={styles.itemDetalhe}>Entrega: {pedido.endereco}</Text>
+                ) : null}
+                <Text style={styles.pedidoTotal}>Total: {formatarPreco(pedido.total)}</Text>
+
+                {/* Pedido fechado: só mostra como terminou */}
+                {pedido.status === 'Finalizado' ? (
+                  <Text style={styles.pedidoFinalizado}>Pedido finalizado</Text>
+                ) : null}
+                {pedido.status === 'Cancelado' ? (
+                  <Text style={styles.pedidoCancelado}>
+                    Pedido cancelado · {formatarPreco(pedido.total * 0.7)} (70%) devolvido ao cliente
+                  </Text>
+                ) : null}
+
+                {/* Pedido em andamento: passos e botões para fechar */}
+                {pedido.status !== 'Finalizado' && pedido.status !== 'Cancelado' ? (
+                  <View style={styles.pedidoAcoes}>
+                    <View style={styles.chips}>
+                      {STATUS_PEDIDO.map((status) => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[styles.chip, pedido.status === status && styles.chipAtivo]}
+                          onPress={() => mudarStatus(pedido, status)}
+                          disabled={carregando}
+                        >
+                          <Text style={[styles.chipTexto, pedido.status === status && styles.chipTextoAtivo]}>
+                            {status}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={styles.linhaBotoes}>
+                      <TouchableOpacity
+                        style={[styles.botao, styles.botaoMetade]}
+                        onPress={() => mudarStatus(pedido, 'Finalizado')}
+                        disabled={carregando}
+                      >
+                        <Text style={styles.botaoTexto}>Finalizar pedido</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.botaoSecundario, styles.botaoMetade]}
+                        onPress={() => abrirCancelamento(pedido)}
+                        disabled={carregando}
+                      >
+                        <Text style={styles.botaoSecundarioTexto}>Cancelar pedido</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ))}
           </View>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.cardTitulo}>Novo cupom</Text>
-            <Campo
-              rotulo="Código"
-              value={codigo}
-              onChangeText={setCodigo}
-              placeholder="CAFE20"
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-            <Campo rotulo="Título" value={titulo} onChangeText={setTitulo} placeholder="20% OFF" />
-            <Campo
-              rotulo="Descrição (opcional)"
-              value={descricaoCupom}
-              onChangeText={setDescricaoCupom}
-              placeholder="Válido nesta semana"
-            />
-            <Text style={styles.rotulo}>Tipo de desconto</Text>
-            <View style={styles.chips}>
+        ) : null}
+
+        {/* ---------- ABA PRODUTOS ---------- */}
+        {aba === 'produtos' ? (
+          <View>
+            <View style={styles.card}>
+              <Text style={styles.cardTitulo}>{editandoId === '' ? 'Novo produto' : 'Editar produto'}</Text>
+              <Campo rotulo="Nome" value={nome} onChangeText={setNome} placeholder="Ex.: Affogato" />
+              <Campo
+                rotulo="Descrição"
+                value={descricao}
+                onChangeText={setDescricao}
+                placeholder="Descrição curta"
+                multiline
+              />
+              <Text style={styles.rotulo}>Categoria</Text>
+              <View style={styles.chips}>
+                {CATEGORIAS.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.chip, categoria === item && styles.chipAtivo]}
+                    onPress={() => setCategoria(item)}
+                  >
+                    <Text style={[styles.chipTexto, categoria === item && styles.chipTextoAtivo]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Campo
+                rotulo="Preço (R$)"
+                value={preco}
+                onChangeText={(texto: string) => setPreco(soNumerosComVirgula(texto))}
+                placeholder="13,90"
+                keyboardType="decimal-pad"
+              />
+              <Campo
+                rotulo="Preço anterior (opcional)"
+                value={precoAntigo}
+                onChangeText={(texto: string) => setPrecoAntigo(soNumerosComVirgula(texto))}
+                placeholder="18,90"
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.rotulo}>Imagem (opcional)</Text>
+              <View style={styles.imagemLinha}>
+                {imagem !== '' ? (
+                  <Image source={origemImagem(imagem, nome)} style={styles.imagemPrevia} />
+                ) : (
+                  <View style={[styles.imagemPrevia, styles.imagemVazia]}>
+                    <Ionicons name="image-outline" size={26} color={cor('#4A3525')} />
+                  </View>
+                )}
+                <View style={styles.imagemBotoes}>
+                  <TouchableOpacity style={styles.botaoSecundario} onPress={escolherImagem} disabled={carregando}>
+                    <Text style={styles.botaoSecundarioTexto}>Escolher da galeria</Text>
+                  </TouchableOpacity>
+                  {imagem !== '' ? (
+                    <TouchableOpacity onPress={() => setImagem('')}>
+                      <Text style={styles.tirarImagem}>Tirar imagem</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+              <Campo
+                rotulo="Ou cole o link de uma imagem"
+                value={imagem}
+                onChangeText={setImagem}
+                placeholder="https://..."
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
               <TouchableOpacity
-                style={[styles.chip, tipo === 'porcentagem' && styles.chipAtivo]}
-                onPress={() => setTipo('porcentagem')}
+                style={[styles.botao, carregando && styles.botaoDesativado]}
+                onPress={salvarProduto}
+                disabled={carregando}
+                activeOpacity={0.85}
               >
-                <Text style={[styles.chipTexto, tipo === 'porcentagem' && styles.chipTextoAtivo]}>
-                  Porcentagem
+                <Text style={styles.botaoTexto}>
+                  {carregando ? 'Salvando...' : editandoId === '' ? 'Cadastrar produto' : 'Salvar alterações'}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.chip, tipo === 'valor' && styles.chipAtivo]}
-                onPress={() => setTipo('valor')}
-              >
-                <Text style={[styles.chipTexto, tipo === 'valor' && styles.chipTextoAtivo]}>
-                  Valor em R$
-                </Text>
-              </TouchableOpacity>
+              {editandoId !== '' ? (
+                <TouchableOpacity
+                  style={styles.botaoSecundario}
+                  onPress={() => {
+                    limparProduto();
+                    limparAvisos();
+                  }}
+                >
+                  <Text style={styles.botaoSecundarioTexto}>Cancelar edição</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
-            <Campo
-              rotulo={tipo === 'porcentagem' ? 'Porcentagem' : 'Valor (R$)'}
-              value={valorCupom}
-              onChangeText={setValorCupom}
-              placeholder={tipo === 'porcentagem' ? '10' : '5,00'}
-              keyboardType="decimal-pad"
-            />
-            <TouchableOpacity
-              style={[styles.botao, carregando && styles.botaoDesativado]}
-              onPress={salvarCupom}
-              disabled={carregando}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.botaoTexto}>{carregando ? 'Salvando...' : 'Cadastrar cupom'}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
-        <Text style={styles.listaTitulo}>
-          {aba === 'produtos' ? 'Produtos na loja' : 'Cupons na loja'}
-        </Text>
-
-        {aba === 'produtos'
-          ? produtos.map((item) => (
-              <View key={item.id} style={styles.item}>
+            <Text style={styles.listaTitulo}>Produtos na loja</Text>
+            {produtos.map((item) => (
+              <View key={item.id} style={[styles.item, item.disponivel === false && styles.itemEsgotado]}>
                 <Image source={origemImagem(item.imagem, item.nome)} style={styles.itemImagem} />
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemNome} numberOfLines={1}>
@@ -501,20 +774,102 @@ export default function FuncionariosScreen() {
                   </Text>
                   <Text style={styles.itemDetalhe}>
                     {item.categoria} · R${item.precoNovo}
+                    {item.disponivel === false ? ' · Esgotado' : ''}
                   </Text>
                 </View>
+                <TouchableOpacity onPress={() => editarProduto(item)} hitSlop={8}>
+                  <Ionicons name="create-outline" size={22} color={cor('#4A3525')} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => mudarDisponivel(item)} hitSlop={8} disabled={carregando}>
+                  <Ionicons
+                    name={item.disponivel === false ? 'eye-outline' : 'eye-off-outline'}
+                    size={22}
+                    color={cor('#4A3525')}
+                  />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => pedirRemocaoProduto(item)} hitSlop={8}>
                   <Ionicons name="trash-outline" size={22} color={cor('#4A3525')} />
                 </TouchableOpacity>
               </View>
-            ))
-          : cupons.map((item) => (
+            ))}
+            <Text style={styles.legenda}>
+              Lápis: editar · Olho: esgotar ou voltar ao cardápio · Lixeira: remover
+            </Text>
+          </View>
+        ) : null}
+
+        {/* ---------- ABA CUPONS ---------- */}
+        {aba === 'cupons' ? (
+          <View>
+            <View style={styles.card}>
+              <Text style={styles.cardTitulo}>Novo cupom</Text>
+              <Campo
+                rotulo="Código"
+                value={codigo}
+                onChangeText={setCodigo}
+                placeholder="CAFE20"
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+              <Campo rotulo="Título" value={titulo} onChangeText={setTitulo} placeholder="20% OFF" />
+              <Campo
+                rotulo="Descrição (opcional)"
+                value={descricaoCupom}
+                onChangeText={setDescricaoCupom}
+                placeholder="Válido nesta semana"
+              />
+              <Text style={styles.rotulo}>Tipo de desconto</Text>
+              <View style={styles.chips}>
+                <TouchableOpacity
+                  style={[styles.chip, tipo === 'porcentagem' && styles.chipAtivo]}
+                  onPress={() => setTipo('porcentagem')}
+                >
+                  <Text style={[styles.chipTexto, tipo === 'porcentagem' && styles.chipTextoAtivo]}>
+                    Porcentagem
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.chip, tipo === 'valor' && styles.chipAtivo]}
+                  onPress={() => setTipo('valor')}
+                >
+                  <Text style={[styles.chipTexto, tipo === 'valor' && styles.chipTextoAtivo]}>
+                    Valor em R$
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Campo
+                rotulo={tipo === 'porcentagem' ? 'Porcentagem' : 'Valor (R$)'}
+                value={valorCupom}
+                onChangeText={(texto: string) => setValorCupom(soNumerosComVirgula(texto))}
+                placeholder={tipo === 'porcentagem' ? '10' : '5,00'}
+                keyboardType="decimal-pad"
+              />
+              <Campo
+                rotulo="Validade (opcional)"
+                value={validade}
+                onChangeText={(texto: string) => setValidade(formatarData(texto))}
+                placeholder="31/12/2026"
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity
+                style={[styles.botao, carregando && styles.botaoDesativado]}
+                onPress={salvarCupom}
+                disabled={carregando}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.botaoTexto}>{carregando ? 'Salvando...' : 'Cadastrar cupom'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.listaTitulo}>Cupons na loja</Text>
+            {cupons.map((item) => (
               <View key={item.id} style={styles.item}>
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemNome}>{item.codigo}</Text>
                   <Text style={styles.itemDetalhe}>
                     {item.titulo} ·{' '}
                     {item.tipo === 'porcentagem' ? item.valor + '%' : formatarPreco(item.valor)}
+                    {item.validade !== '' ? ' · até ' + item.validade : ' · sem prazo'}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => pedirRemocaoCupom(item)} hitSlop={8}>
@@ -522,7 +877,160 @@ export default function FuncionariosScreen() {
                 </TouchableOpacity>
               </View>
             ))}
+          </View>
+        ) : null}
+
+        {/* ---------- ABA AVISOS ---------- */}
+        {aba === 'avisos' ? (
+          <View>
+            <View style={styles.card}>
+              <Text style={styles.cardTitulo}>Novo aviso</Text>
+              <Text style={styles.itemDetalhe}>Aparece na aba Notificações de todos os clientes.</Text>
+              <Campo
+                rotulo="Título"
+                value={tituloAviso}
+                onChangeText={setTituloAviso}
+                placeholder="Combo da tarde"
+              />
+              <Campo
+                rotulo="Mensagem"
+                value={descricaoAviso}
+                onChangeText={setDescricaoAviso}
+                placeholder="Café + pão de queijo por R$ 9,90 até as 18h"
+                multiline
+              />
+              <Text style={styles.rotulo}>Ícone</Text>
+              <View style={styles.chips}>
+                {ICONES_AVISO.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.chip, iconeAviso === item && styles.chipAtivo]}
+                    onPress={() => setIconeAviso(item)}
+                  >
+                    <Ionicons
+                      name={item as any}
+                      size={20}
+                      color={iconeAviso === item ? '#FFFFFF' : cor('#4A3525')}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[styles.botao, carregando && styles.botaoDesativado]}
+                onPress={salvarAviso}
+                disabled={carregando}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.botaoTexto}>{carregando ? 'Enviando...' : 'Enviar aviso'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.listaTitulo}>Avisos enviados</Text>
+            {avisos.length === 0 ? <Text style={styles.vazio}>Nenhum aviso ainda.</Text> : null}
+            {avisos.map((item) => (
+              <View key={item.id} style={styles.item}>
+                <Ionicons name={item.icone} size={26} color={cor('#4A3525')} />
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemNome}>{item.titulo}</Text>
+                  <Text style={styles.itemDetalhe}>{item.descricao}</Text>
+                </View>
+                <TouchableOpacity onPress={() => pedirRemocaoAviso(item)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={22} color={cor('#4A3525')} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* ---------- ABA PRÊMIOS ---------- */}
+        {aba === 'premios' ? (
+          <View>
+            <View style={styles.card}>
+              <Text style={styles.cardTitulo}>Novo prêmio</Text>
+              <Text style={styles.itemDetalhe}>Aparece na tela Fidelidade. Cada R$1,00 gasto vale 10 pontos.</Text>
+              <Campo
+                rotulo="Nome"
+                value={nomePremio}
+                onChangeText={setNomePremio}
+                placeholder="Café expresso"
+              />
+              <Campo
+                rotulo="Pontos"
+                value={pontosPremio}
+                onChangeText={(texto: string) => setPontosPremio(soNumeros(texto))}
+                placeholder="500"
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity
+                style={[styles.botao, carregando && styles.botaoDesativado]}
+                onPress={salvarPremio}
+                disabled={carregando}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.botaoTexto}>{carregando ? 'Salvando...' : 'Cadastrar prêmio'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.listaTitulo}>Prêmios da fidelidade</Text>
+            {recompensas.length === 0 ? <Text style={styles.vazio}>Nenhum prêmio ainda.</Text> : null}
+            {recompensas.map((item) => (
+              <View key={item.id} style={styles.item}>
+                <Ionicons name="gift" size={26} color={cor('#4A3525')} />
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemNome}>{item.nome}</Text>
+                  <Text style={styles.itemDetalhe}>{item.pontos} pontos</Text>
+                </View>
+                <TouchableOpacity onPress={() => pedirRemocaoPremio(item)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={22} color={cor('#4A3525')} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
+
+      {/* ---------- CAIXA DE CANCELAR PEDIDO ---------- */}
+      <Modal
+        visible={cancelando !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCancelando(null)}
+      >
+        <View style={styles.modalFundo}>
+          <View style={styles.modalCaixa}>
+            <Text style={styles.modalTitulo}>Digite {codigoCancelar} para cancelar</Text>
+            {cancelando ? (
+              <View style={styles.modalInfo}>
+                <Text style={styles.modalTexto}>
+                  Pedido #{cancelando.id} de {cancelando.cliente}, pago {formatarPreco(cancelando.total)}.
+                </Text>
+                <Text style={styles.modalAvisoTaxa}>
+                  Atenção: cancelar gera uma taxa de 30% do valor pago ({formatarPreco(cancelando.total * 0.3)}).
+                  Só 70% ({formatarPreco(cancelando.total * 0.7)}) volta para o cliente.
+                </Text>
+              </View>
+            ) : null}
+            <TextInput
+              style={[styles.campo, styles.modalCampo]}
+              placeholder="000"
+              placeholderTextColor={cor('#8C837A')}
+              value={codigoDigitado}
+              onChangeText={(texto) => setCodigoDigitado(soNumeros(texto))}
+              keyboardType="number-pad"
+              maxLength={3}
+            />
+            {erroCancelar !== '' ? <Text style={[styles.erro, styles.erroAcesso]}>{erroCancelar}</Text> : null}
+            <View style={styles.linhaBotoes}>
+              <TouchableOpacity style={[styles.botaoSecundario, styles.botaoMetade]} onPress={() => setCancelando(null)}>
+                <Text style={styles.botaoSecundarioTexto}>Voltar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.botaoPerigo, styles.botaoMetade]} onPress={confirmarCancelamento}>
+                <Text style={styles.botaoTexto}>Cancelar pedido</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -611,16 +1119,42 @@ const styles = criarEstilos({
     fontSize: 13,
     textAlign: 'center',
   },
+  resumo: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    gap: 8,
+  },
+  resumoItem: {
+    flex: 1,
+    backgroundColor: '#F6EBDD',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  resumoNumero: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#3B291A',
+  },
+  resumoTexto: {
+    fontSize: 12,
+    color: '#4A3525',
+    marginTop: 2,
+  },
   abas: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginHorizontal: 20,
     backgroundColor: '#F6EBDD',
     borderRadius: 14,
     padding: 4,
+    gap: 4,
     marginBottom: 12,
   },
   aba: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: '30%',
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
@@ -693,6 +1227,107 @@ const styles = criarEstilos({
   chipTextoAtivo: {
     color: '#FFFFFF',
   },
+  filtros: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+  },
+  atualizar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    marginHorizontal: 20,
+    marginBottom: 10,
+  },
+  atualizarTexto: {
+    color: '#4A3525',
+    fontWeight: '600',
+  },
+  vazio: {
+    marginHorizontal: 22,
+    color: '#4A3525',
+    fontSize: 14,
+  },
+  pedido: {
+    backgroundColor: '#F6EBDD',
+    borderRadius: 14,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    padding: 12,
+    gap: 6,
+  },
+  pedidoItens: {
+    fontSize: 14,
+    color: '#2C1810',
+  },
+  pedidoTotal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3B291A',
+  },
+  pedidoAcoes: {
+    gap: 6,
+  },
+  pedidoFinalizado: {
+    color: '#2E5A32',
+    fontWeight: '700',
+  },
+  pedidoCancelado: {
+    color: '#8B2E2E',
+    fontWeight: '700',
+  },
+  linhaBotoes: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  botaoMetade: {
+    flex: 1,
+    marginTop: 0,
+    justifyContent: 'center',
+  },
+  botaoPerigo: {
+    backgroundColor: '#8B2E2E',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalFundo: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCaixa: {
+    backgroundColor: '#F6EBDD',
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+  modalTitulo: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#3B291A',
+    textAlign: 'center',
+  },
+  modalInfo: {
+    gap: 8,
+  },
+  modalTexto: {
+    fontSize: 14,
+    color: '#4A3525',
+    textAlign: 'center',
+  },
+  modalAvisoTaxa: {
+    fontSize: 14,
+    color: '#8B2E2E',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  modalCampo: {
+    textAlign: 'center',
+    fontSize: 22,
+    letterSpacing: 6,
+  },
   botao: {
     backgroundColor: '#4A3525',
     borderRadius: 12,
@@ -707,6 +1342,44 @@ const styles = criarEstilos({
   },
   botaoDesativado: {
     opacity: 0.6,
+  },
+  botaoSecundario: {
+    borderWidth: 1.5,
+    borderColor: '#4A3525',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  botaoSecundarioTexto: {
+    color: '#4A3525',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  imagemLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  imagemPrevia: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+  },
+  imagemVazia: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4D3C4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imagemBotoes: {
+    flex: 1,
+    gap: 8,
+  },
+  tirarImagem: {
+    color: '#8B2E2E',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   erro: {
     color: '#8B2E2E',
@@ -728,6 +1401,12 @@ const styles = criarEstilos({
     fontWeight: 'bold',
     color: '#3B291A',
   },
+  legenda: {
+    marginHorizontal: 22,
+    marginTop: 4,
+    fontSize: 12,
+    color: '#4A3525',
+  },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -737,6 +1416,9 @@ const styles = criarEstilos({
     marginBottom: 10,
     padding: 12,
     gap: 12,
+  },
+  itemEsgotado: {
+    opacity: 0.55,
   },
   itemImagem: {
     width: 52,

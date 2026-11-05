@@ -24,6 +24,7 @@ import {
   ProdutoCatalogo,
   removerDoCarrinho,
   sair,
+  tamanhoInicial,
 } from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
 
@@ -84,6 +85,7 @@ export default function HomeScreen() {
       nota: item.nota,
       preco: item.precoNovo,
       imagem: item.imagem,
+      categoria: item.categoria,
     });
     setFavoritos(loja.favoritos.map((produto) => produto.nome));
   }
@@ -95,7 +97,7 @@ export default function HomeScreen() {
       adicionarAoCarrinho({
         nome: item.nome,
         desc: item.desc,
-        tamanho: 'P',
+        tamanho: tamanhoInicial(item.categoria),
         opcional: '---',
         precoUnitario: paraNumero(item.precoNovo),
         qtd: 1,
@@ -181,6 +183,7 @@ export default function HomeScreen() {
             nota: item.nota,
             preco: item.precoNovo,
             imagem: item.imagem,
+            categoria: item.categoria,
           },
         })
       }
@@ -264,17 +267,6 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.sidebarMenu}>
-              <TouchableOpacity
-                style={styles.sidebarItem}
-                onPress={() => {
-                  setMenuAberto(false);
-                  router.push('/funcionarios');
-                }}
-              >
-                <Ionicons name="briefcase-outline" size={22} color={cor('#4A3525')} />
-                <Text style={styles.sidebarItemText}>Área do funcionário</Text>
-              </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.sidebarItem}
                 onPress={() => {

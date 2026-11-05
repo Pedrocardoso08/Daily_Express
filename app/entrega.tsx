@@ -11,7 +11,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { mapa } from '../lib/imagens';
 import { enviar } from '../lib/api';
-import { buscarEnderecos, Endereco, idUsuario, loja, textoEndereco } from '../lib/loja';
+import { buscarEnderecos, Endereco, idUsuario, loja, soNumeros, textoEndereco } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
  
 export default function EntregaScreen() {
@@ -211,7 +211,7 @@ export default function EntregaScreen() {
                 placeholderTextColor={cor('#A08970')}
                 keyboardType="numeric"
                 value={numero}
-                onChangeText={setNumero}
+                onChangeText={(texto) => setNumero(soNumeros(texto))}
               />
 </View>
 </View>

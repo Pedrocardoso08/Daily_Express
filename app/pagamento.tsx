@@ -9,7 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { enviar } from '../lib/api';
-import { buscarCartoes, Cartao, formatarPreco, idUsuario, loja } from '../lib/loja';
+import { buscarCartoes, Cartao, formatarData, formatarPreco, idUsuario, loja, soNumeros } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
  
 export default function PagamentoScreen() {
@@ -258,8 +258,9 @@ export default function PagamentoScreen() {
                   placeholder="Número do cartão.."
                   placeholderTextColor={cor('#A08970')}
                   keyboardType="numeric"
+                  maxLength={16}
                   value={numeroCartao}
-                  onChangeText={setNumeroCartao}
+                  onChangeText={(texto) => setNumeroCartao(soNumeros(texto))}
                 />
 <Ionicons name="pencil" size={16} color={cor('#A08970')} />
 </View>
@@ -274,7 +275,7 @@ export default function PagamentoScreen() {
                     keyboardType="numeric"
                     maxLength={5}
                     value={validade}
-                    onChangeText={setValidade}
+                    onChangeText={(texto) => setValidade(formatarData(texto))}
                   />
 </View>
  
@@ -286,7 +287,7 @@ export default function PagamentoScreen() {
                     keyboardType="numeric"
                     maxLength={4}
                     value={cvv}
-                    onChangeText={setCvv}
+                    onChangeText={(texto) => setCvv(soNumeros(texto))}
                   />
 </View>
 </View>

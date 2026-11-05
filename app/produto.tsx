@@ -17,14 +17,14 @@ import {
   buscarFavoritos,
   ehFavorito,
   formatarPreco,
+  NOMES_TAMANHO,
   paraNumero,
   precoPorTamanho,
   sair,
+  Tamanho,
+  tamanhoInicial,
 } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
-
-const DESCRICAO_CAPUCCINO =
-  'cappuccino clássico italiano é uma bebida equilibrada, famosa por sua textura aveludada e pela divisão visual perfeita de seus ingredientes. Na receita tradicional, ele é composto por três partes iguais: 1/3 de café expresso, 1/3 de leite vaporizado e 1/3 de espuma de leite.';
 
 function texto(valor: string | string[] | undefined, padrao: string) {
   if (typeof valor === 'string' && valor !== '') {
@@ -50,21 +50,24 @@ export default function ProdutoDetalhesScreen() {
     nota?: string;
     preco?: string;
     imagem?: string;
+    categoria?: string;
   }>();
 
-  const nome = texto(params.nome, 'Capuccino clássico');
-  const nota = texto(params.nota, '4.6');
-  const preco = texto(params.preco, '13,90');
-  const imagem = texto(
-    params.imagem,
-    'https://images.unsplash.com/photo-1534778101976-62847782c213?q=80&w=800&auto=format&fit=crop'
-  );
-  const descricao =
-    nome === 'Capuccino clássico' ? DESCRICAO_CAPUCCINO : texto(params.descricao, DESCRICAO_CAPUCCINO);
+  // Tudo vem do produto tocado no menu ou nos favoritos (cadastrado pelo funcionário)
+  const nome = texto(params.nome, '');
+  // Média das avaliações dos clientes, ex.: "4.5". "Novo" quando ninguém avaliou ainda.
+  const nota = texto(params.nota, 'Novo');
+  const media = Number(nota);
+  const preco = texto(params.preco, '0,00');
+  const imagem = texto(params.imagem, '');
+  const descricao = texto(params.descricao, '');
+  const categoria = texto(params.categoria, '');
+  // Só bebidas escolhem o tamanho do copo; o resto é tamanho único
+  const temTamanho = categoria === 'Bebidas';
 
   const [menuAberto, setMenuAberto] = useState(false);
   const [favorito, setFavorito] = useState(ehFavorito(nome));
-  const [tamanho, setTamanho] = useState<'P' | 'M' | 'G'>('P');
+  const [tamanho, setTamanho] = useState<Tamanho>(tamanhoInicial(categoria));
   const [quantidade, setQuantidade] = useState(1);
 
   // Confere no banco se o produto está nos favoritos
@@ -80,7 +83,7 @@ export default function ProdutoDetalhesScreen() {
   const precoTotal = precoUnitario * quantidade;
 
   function favoritar() {
-    alternarFavorito({ nome, desc: texto(params.descricao, ''), nota, preco, imagem });
+    alternarFavorito({ nome, desc: texto(params.descricao, ''), nota, preco, imagem, categoria });
     setFavorito(!favorito);
   }
 
@@ -242,7 +245,15 @@ export default function ProdutoDetalhesScreen() {
 
           <View style={styles.ratingRow}>
             <View style={styles.ratingInfo}>
-              <Ionicons name="star" size={18} color={cor('#4A3525')} />
+              {/* 5 estrelas pela média: cheia, meia ou vazia */}
+              {[1, 2, 3, 4, 5].map((estrela) => (
+                <Ionicons
+                  key={estrela}
+                  name={media >= estrela ? 'star' : media >= estrela - 0.5 ? 'star-half' : 'star-outline'}
+                  size={18}
+                  color={cor('#4A3525')}
+                />
+              ))}
               <Text style={styles.ratingValue}>{nota}</Text>
             </View>
 
@@ -260,23 +271,30 @@ export default function ProdutoDetalhesScreen() {
             <Text style={styles.descriptionText}>{descricao}</Text>
           </View>
 
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionLabel}>Tamanho</Text>
-            <View style={styles.sizeRow}>
-              {(['P', 'M', 'G'] as const).map((item) => (
-                <TouchableOpacity
-                  key={item}
-                  style={[styles.sizeButton, tamanho === item && styles.sizeButtonActive]}
-                  onPress={() => setTamanho(item)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.sizeText, tamanho === item && styles.sizeTextActive]}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          {temTamanho ? (
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>Tamanho</Text>
+              <View style={styles.sizeRow}>
+                {(['P', 'M', 'G'] as const).map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.sizeButton, tamanho === item && styles.sizeButtonActive]}
+                    onPress={() => setTamanho(item)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.sizeText, tamanho === item && styles.sizeTextActive]}>
+                      {NOMES_TAMANHO[item]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>Tamanho</Text>
+              <Text style={styles.descriptionText}>Tamanho único</Text>
+            </View>
+          )}
 
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>Quantidade</Text>
@@ -358,7 +376,7 @@ const styles = criarEstilos({
   ratingInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
   },
   ratingValue: {
     fontSize: 14,

@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { estiloLogo, logo } from '../lib/imagens';
 import { enviar } from '../lib/api';
-import { buscarCartoes, Cartao, idUsuario, loja } from '../lib/loja';
+import { buscarCartoes, Cartao, formatarData, idUsuario, loja, soNumeros } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function CartoesScreen() {
@@ -182,9 +182,9 @@ export default function CartoesScreen() {
               placeholder="Número do cartão"
               placeholderTextColor={cor('#A08970')}
               keyboardType="numeric"
-              maxLength={19}
+              maxLength={16}
               value={numeroCartao}
-              onChangeText={setNumeroCartao}
+              onChangeText={(texto) => setNumeroCartao(soNumeros(texto))}
             />
             <TextInput
               style={styles.input}
@@ -193,11 +193,7 @@ export default function CartoesScreen() {
               keyboardType="numeric"
               maxLength={5}
               value={validade}
-              onChangeText={(texto) => {
-                // Coloca a barra sozinho: "1226" vira "12/26"
-                const numeros = texto.replace(/\D/g, '');
-                setValidade(numeros.length > 2 ? numeros.slice(0, 2) + '/' + numeros.slice(2, 4) : numeros);
-              }}
+              onChangeText={(texto) => setValidade(formatarData(texto))}
             />
 
             {erro !== '' && <Text style={styles.erroText}>{erro}</Text>}

@@ -6,8 +6,9 @@ import {
   Image,
   ScrollView,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { buscar } from '../lib/api';
 import { estiloLogo, logo } from '../lib/imagens';
 import { buscarPerfil } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
@@ -25,22 +26,34 @@ export default function FidelidadeScreen() {
   }
 
   const [pontos, setPontos] = useState(0);
+  // Prêmios cadastrados na Área do funcionário (vêm do menor para o maior)
+  const [recompensas, setRecompensas] = useState<{ id: number; nome: string; pontos: number }[]>([]);
 
-  // Lê os pontos do banco quando a tela abre
+  // Lê os pontos e os prêmios do banco quando a tela abre
   useEffect(() => {
     buscarPerfil().then((perfil) => {
       if (perfil) {
         setPontos(perfil.pontos_fidelidade);
       }
     });
+    buscar('/recompensas')
+      .then((lista) => {
+        if (Array.isArray(lista)) {
+          setRecompensas(lista);
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  // Próxima recompensa: café com 500 pontos, combo com 1000
-  let mensagem = 'Você já pode trocar seus pontos pelo combo café + croissant!';
-  if (pontos < 500) {
-    mensagem = 'Faltam ' + (500 - pontos) + ' pontos para ganhar um café grátis!';
-  } else if (pontos < 1000) {
-    mensagem = 'Faltam ' + (1000 - pontos) + ' pontos para ganhar o combo café + croissant!';
+  // A mensagem fala do próximo prêmio da lista
+  let mensagem = 'A loja ainda não cadastrou prêmios. Continue juntando pontos!';
+  if (recompensas.length > 0) {
+    const proximo = recompensas.find((item) => item.pontos > pontos);
+    if (proximo) {
+      mensagem = 'Faltam ' + (proximo.pontos - pontos) + ' pontos para ganhar ' + proximo.nome + '!';
+    } else {
+      mensagem = 'Você já pode trocar seus pontos por ' + recompensas[recompensas.length - 1].nome + '!';
+    }
   }
 
   // A cápsula tem 4 partes; cada 250 pontos enche uma (de baixo para cima)
@@ -100,30 +113,18 @@ export default function FidelidadeScreen() {
         <View style={styles.rewardsSection}>
           <Text style={styles.rewardsTitle}>Recompensas</Text>
 
-          <View style={styles.rewardItem}>
-            <Ionicons name="cafe" size={30} color={cor('#4A3525')} />
-            <Text style={styles.rewardText} numberOfLines={1}>
-              Café expresso..........................500 pontos
-            </Text>
-          </View>
-
-          <View style={styles.rewardItem}>
-            <MaterialCommunityIcons name="cake" size={30} color={cor('#4A3525')} />
-            <Text style={styles.rewardText} numberOfLines={1}>
-              Fatia de bolo..........................500 pontos
-            </Text>
-          </View>
-
-          <View style={styles.rewardItem}>
-            <View style={styles.comboIcons}>
-              <Ionicons name="cafe" size={20} color={cor('#4A3525')} />
-              <Ionicons name="add" size={14} color={cor('#4A3525')} />
-              <MaterialCommunityIcons name="food-croissant" size={20} color={cor('#4A3525')} />
+          {recompensas.map((item) => (
+            <View key={item.id} style={styles.rewardItem}>
+              <Ionicons name="gift" size={30} color={cor('#4A3525')} />
+              <Text style={styles.rewardText} numberOfLines={1}>
+                {item.nome} - {item.pontos} pontos
+              </Text>
             </View>
-            <Text style={styles.rewardText} numberOfLines={1}>
-              Combo café + croissant  1000 pontos
-            </Text>
-          </View>
+          ))}
+
+          {recompensas.length === 0 ? (
+            <Text style={styles.rewardText}>Nenhum prêmio cadastrado ainda.</Text>
+          ) : null}
         </View>
       </ScrollView>
     </View>
@@ -290,11 +291,5 @@ const styles = criarEstilos({
     fontSize: 13,
     color: '#2A1F17',
     fontWeight: '500',
-  },
-  comboIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 32,
-    justifyContent: 'center',
   },
 });

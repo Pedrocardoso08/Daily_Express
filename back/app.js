@@ -40,7 +40,12 @@ const callback = (req, res)=>{
         var usuario = rota.query.usuario
 
         if(rota.pathname == '/produtos'){
-            LojaBD.getProdutos(resposta)
+            // /produtos?todos=1 traz também os esgotados (tela de funcionários)
+            LojaBD.getProdutos(rota.query.todos, resposta)
+        }else if(rota.pathname == '/pedidosLoja'){
+            LojaBD.getPedidosLoja(resposta)
+        }else if(rota.pathname == '/recompensas'){
+            LojaBD.getRecompensas(resposta)
         }else if(rota.pathname == '/cupons'){
             LojaBD.getCupons(usuario, resposta)
         }else if(rota.pathname == '/perfil'){
@@ -55,6 +60,8 @@ const callback = (req, res)=>{
             ClienteBD.getCartoes(usuario, resposta)
         }else if(rota.pathname == '/notificacoes'){
             ClienteBD.getNotificacoes(usuario, resposta)
+        }else if(rota.pathname == '/avaliacoes'){
+            ClienteBD.getAvaliacoes(usuario, resposta)
         }else if(rota.pathname.startsWith('/fotos/')){
             // Entrega a foto de perfil salva na pasta back/fotos
             // (o basename impede de pedir arquivos fora dessa pasta)
@@ -102,6 +109,20 @@ const callback = (req, res)=>{
                 LojaBD.addCupom(dados, resposta)
             }else if(rota.pathname == '/removerCupom'){
                 LojaBD.removerCupom(dados, resposta)
+            }else if(rota.pathname == '/fotoProduto'){
+                LojaBD.salvarFotoProduto(dados, resposta)
+            }else if(rota.pathname == '/disponivel'){
+                LojaBD.mudarDisponivel(dados, resposta)
+            }else if(rota.pathname == '/statusPedido'){
+                LojaBD.mudarStatus(dados, resposta)
+            }else if(rota.pathname == '/notificacao'){
+                LojaBD.addNotificacao(dados, resposta)
+            }else if(rota.pathname == '/removerNotificacao'){
+                LojaBD.removerNotificacao(dados, resposta)
+            }else if(rota.pathname == '/recompensa'){
+                LojaBD.addRecompensa(dados, resposta)
+            }else if(rota.pathname == '/removerRecompensa'){
+                LojaBD.removerRecompensa(dados, resposta)
 
             // Área do cliente
             }else if(rota.pathname == '/preferencias'){
@@ -122,6 +143,8 @@ const callback = (req, res)=>{
                 ClienteBD.removerCartao(dados, resposta)
             }else if(rota.pathname == '/lerNotificacoes'){
                 ClienteBD.lerNotificacoes(dados, resposta)
+            }else if(rota.pathname == '/avaliacao'){
+                ClienteBD.avaliar(dados, resposta)
             }else{
                 rotaInvalida(res)
             }

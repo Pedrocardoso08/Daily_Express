@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { estiloLogo, logo } from '../lib/imagens';
 import { enviar } from '../lib/api';
-import { buscarEnderecos, Endereco, idUsuario, loja } from '../lib/loja';
+import { buscarEnderecos, Endereco, idUsuario, loja, soNumeros } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function EnderecosScreen() {
@@ -171,7 +171,7 @@ export default function EnderecosScreen() {
               placeholderTextColor={cor('#A08970')}
               keyboardType="numeric"
               value={numero}
-              onChangeText={setNumero}
+              onChangeText={(texto) => setNumero(soNumeros(texto))}
             />
             <TextInput
               style={styles.input}

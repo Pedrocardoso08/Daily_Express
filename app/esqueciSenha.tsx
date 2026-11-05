@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { enviar } from '../lib/api';
 import { estiloLogo, logo } from '../lib/imagens';
-import { loja } from '../lib/loja';
+import { loja, soNumeros } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function EsqueceuSenhaScreen() {
@@ -114,7 +114,8 @@ export default function EsqueceuSenhaScreen() {
                 placeholder="Código..."
                 placeholderTextColor={cor('#8C837A')}
                 value={codigo}
-                onChangeText={setCodigo}
+                onChangeText={(texto) => setCodigo(soNumeros(texto))}
+                maxLength={6}
                 keyboardType="number-pad"
                 autoCapitalize="none"
               />

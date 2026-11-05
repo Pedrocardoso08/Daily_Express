@@ -156,18 +156,6 @@ export default function CadastroScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.socialTitle}>Continuar com:</Text>
-        <View style={styles.socialContainer}>
-          <TouchableOpacity style={styles.socialButton} onPress={() => setErro('O cadastro com Google ainda não está disponível.')}>
-            <Ionicons name="logo-google" size={22} color={cor('#4A3525')} />
-            <Text style={styles.socialText}>google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton} onPress={() => setErro('O cadastro com Facebook ainda não está disponível.')}>
-            <Ionicons name="logo-facebook" size={22} color={cor('#4A3525')} />
-            <Text style={styles.socialText}>facebook</Text>
-          </TouchableOpacity>
-        </View>
-
         {erro != '' ? <Text style={styles.erro}>{erro}</Text> : null}
 
         <TouchableOpacity
@@ -245,33 +233,12 @@ const styles = criarEstilos({
     color: '#333',
     fontSize: 15,
   },
-  socialTitle: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#1A1A1A',
-    marginTop: 10,
-    marginBottom: 15,
-  },
-  socialContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 30,
-    marginBottom: 30,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  socialText: {
-    fontSize: 15,
-    color: '#4A3525',
-  },
   mainButton: {
     backgroundColor: '#4A3525',
     borderRadius: 8,
     paddingVertical: 15,
     alignItems: 'center',
+    marginTop: 20,
     marginBottom: 15,
   },
   mainButtonDesativado: {

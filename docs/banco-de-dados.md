@@ -6,7 +6,7 @@ As rotas do cliente ficam em [back/database/ClienteBD.js](../back/database/Clien
 
 O nível do banco segue a referência da turma (`referencia banco e back/projetoLoginEMI`): MySQL simples, com `CREATE TABLE`, `VARCHAR`, `INT`, `DATE` e chaves estrangeiras. A senha fica criptografada com **bcrypt**, como no `UsuarioBD.js` da referência. O back-end fica na pasta [back/](../back/).
 
-O script que cria tudo está em [database/daily_express.sql](../database/daily_express.sql). Ele apaga o banco `daily_express` se ele já existir e cria de novo, já com dados de exemplo. Para atualizar um banco que já existe sem perder os dados, use [database/atualizacao.sql](../database/atualizacao.sql).
+O script que cria tudo está em [database/daily_express.sql](../database/daily_express.sql). Ele apaga o banco `daily_express` se ele já existir e cria de novo, só com as tabelas vazias (nenhum `INSERT`). Os produtos, os cupons, os avisos e os prêmios são cadastrados na Área do funcionário, que fica na tela de login. As categorias e os tamanhos o back-end cria sozinho na primeira vez que precisar.
 
 ## Exclusão lógica (nada é apagado)
 
@@ -16,7 +16,7 @@ O banco segue o princípio da **exclusão lógica** (em inglês, *soft delete*):
 - Listar no app = `SELECT ... WHERE ativo = TRUE`.
 - O registro continua no banco: o histórico, os pedidos antigos e os relatórios não perdem nada.
 
-Tabelas com `ativo`: produtos, cupons, enderecos, cartoes, favoritos e carrinho_itens. O back-end faz isso em produtos e cupons ([back/database/LojaBD.js](../back/database/LojaBD.js)) e em endereços, cartões e favoritos ([back/database/ClienteBD.js](../back/database/ClienteBD.js)). Se um cupom removido for cadastrado de novo com o mesmo código, ele é reativado com os dados novos.
+Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, cartoes, favoritos e carrinho_itens. O back-end faz isso em produtos, cupons, avisos e prêmios ([back/database/LojaBD.js](../back/database/LojaBD.js)) e em endereços, cartões e favoritos ([back/database/ClienteBD.js](../back/database/ClienteBD.js)). Se um cupom removido for cadastrado de novo com o mesmo código, ele é reativado com os dados novos.
 
 ## Tabelas, campos e onde cada uma age
 
@@ -37,16 +37,22 @@ Tabelas com `ativo`: produtos, cupons, enderecos, cartoes, favoritos e carrinho_
 ### 3. categorias
 - **Campos:** id, nome, icone (Promoção, Bebidas, Salgados e Doces).
 - **Onde age:** [app/(tabs)/menu.tsx](../app/(tabs)/menu.tsx) lê os botões de categoria.
+- **Como é preenchida:** quando o funcionário cadastra o primeiro produto de uma categoria, [back/database/LojaBD.js](../back/database/LojaBD.js) cria a categoria.
 
 ### 4. produtos
-- **Campos:** id, categoria_id, nome, descricao_curta, descricao_completa, preco (copo pequeno), preco_antigo (preço riscado), nota, imagem, ativo.
+- **Campos:** id, categoria_id, nome, descricao_curta, descricao_completa, preco (copo pequeno), preco_antigo (preço riscado), imagem, disponivel, ativo.
+- **nota:** não é uma coluna. O back-end calcula a média da tabela **avaliacoes** toda vez que lê os produtos. Sem nenhuma avaliação, o app mostra "Novo".
+- **imagem:** um link (http...) ou o caminho da imagem escolhida na galeria pela Área do funcionário (`fotos/produto_...jpg`, salva na pasta `back/fotos`).
+- **disponivel:** `FALSE` quando o produto está esgotado. Ele some do cardápio e dos favoritos, mas continua na lista do funcionário para voltar depois.
 - **Onde age:**
-  - [app/(tabs)/menu.tsx](../app/(tabs)/menu.tsx) faz a lista e a busca.
+  - [app/(tabs)/menu.tsx](../app/(tabs)/menu.tsx) faz a lista e a busca (só os disponíveis).
   - [app/produto.tsx](../app/produto.tsx) mostra o detalhe.
+  - [app/funcionarios.tsx](../app/funcionarios.tsx) cadastra, edita, esgota e remove.
 
 ### 5. tamanhos
-- **Campos:** sigla (P, M, G), nome, acrescimo (R$0,00, R$2,00 e R$4,00).
+- **Campos:** sigla, nome, acrescimo. P, M e G são os copos das bebidas (200, 300 e 400 ml, com acréscimo de R$0,00, R$2,00 e R$4,00). U é o tamanho único dos doces, salgados e promoções (R$0,00).
 - **Onde age:** [app/produto.tsx](../app/produto.tsx) calcula o preço pelo tamanho. O preço final é `preco + acrescimo`, vezes a quantidade.
+- **Como é preenchida:** no primeiro pedido, [back/database/ClienteBD.js](../back/database/ClienteBD.js) cria P, M e G (os itens do pedido só aceitam tamanhos que existam nesta tabela).
 
 ### 6. favoritos
 - **Campos:** id, usuario_id, produto_id, ativo.
@@ -74,7 +80,7 @@ Tabelas com `ativo`: produtos, cupons, enderecos, cartoes, favoritos e carrinho_
 
 ### 10. cupons
 - **Campos:** id, codigo (único), titulo, descricao, tipo (PORCENTAGEM ou VALOR), valor, validade, ativo.
-- **Valores iguais aos do app:** CAFE10 = 10%, FRETEGRÁTIS = R$5,00, ANIVERSÁRIO = R$11,90.
+- **Como é preenchida:** os funcionários cadastram os cupons na Área do funcionário, com a validade opcional (vazia = sem prazo).
 - **Onde age:**
   - [app/cupons.tsx](../app/cupons.tsx) lista os cupons.
   - [app/(tabs)/carrinho.tsx](../app/(tabs)/carrinho.tsx): o botão "Aplicar" confere se o código existe e calcula o desconto.
@@ -86,13 +92,15 @@ Tabelas com `ativo`: produtos, cupons, enderecos, cartoes, favoritos e carrinho_
   - [app/pagamento.tsx](../app/pagamento.tsx) marca o cupom como `usado` ao finalizar.
 
 ### 12. pedidos
-- **Campos:** id, usuario_id, modo (Comer aqui ou Levar), endereco_entrega (texto), forma_pagamento, cupom (texto), subtotal, desconto, total, status (Preparando, A caminho, Entregue), criado_em.
+- **Campos:** id, usuario_id, modo (Comer aqui ou Levar), endereco_entrega (texto), forma_pagamento, cupom (texto), subtotal, desconto, total, status (Preparando, A caminho, Finalizado ou Cancelado), criado_em.
+- **Cancelado:** a tela avisa que a loja fica com 30% do valor e só 70% volta para o cliente. É só um aviso: nenhum valor é mexido no banco.
 - **Por que o endereço é texto:** o histórico precisa continuar mostrando o endereço mesmo se ele for apagado da tela de Endereços.
 - **Onde age:**
   - [app/(tabs)/carrinho.tsx](../app/(tabs)/carrinho.tsx): a pergunta "Vai comer aqui ou levar?" define o `modo`.
   - [app/entrega.tsx](../app/entrega.tsx) define o `endereco_entrega`.
   - [app/pagamento.tsx](../app/pagamento.tsx) cria o pedido ao tocar em Finalizar.
   - [app/historicoPedidos.tsx](../app/historicoPedidos.tsx) lista e busca.
+  - [app/funcionarios.tsx](../app/funcionarios.tsx), aba Pedidos: lista os pedidos de todos os clientes, muda o `status`, finaliza, cancela (com um código de 3 dígitos para confirmar) e faz o resumo do dia.
 
 ### 13. pedido_itens
 - **Campos:** id, pedido_id, produto_id, tamanho, opcional, quantidade, preco_unitario.
@@ -101,12 +109,20 @@ Tabelas com `ativo`: produtos, cupons, enderecos, cartoes, favoritos e carrinho_
   - [app/pagamento.tsx](../app/pagamento.tsx) copia os itens do carrinho.
   - [app/historicoPedidos.tsx](../app/historicoPedidos.tsx) mostra os itens e usa no "Pedir Novamente".
 
+### Avaliações (tabela avaliacoes)
+- **Campos:** id, usuario_id, produto_id, nota (0 a 5). Cada cliente tem uma nota só por produto (`UNIQUE (usuario_id, produto_id)`): se avaliar de novo, a nota é trocada.
+- **Onde age:**
+  - [app/historicoPedidos.tsx](../app/historicoPedidos.tsx): o cliente toca nas estrelas dos itens que já pediu. O back-end confere em **pedido_itens** se ele pediu mesmo o produto.
+  - [app/(tabs)/menu.tsx](../app/(tabs)/menu.tsx) e [app/produto.tsx](../app/produto.tsx) mostram a média.
+
 ### 14. recompensas
-- **Campos:** id, nome, pontos (ex.: Café expresso por 500 pontos).
-- **Onde age:** [app/fidelidade.tsx](../app/fidelidade.tsx).
+- **Campos:** id, nome, pontos (ex.: Café expresso por 500 pontos), ativo.
+- **Como é preenchida:** os funcionários cadastram os prêmios na aba Prêmios da Área do funcionário.
+- **Onde age:** [app/fidelidade.tsx](../app/fidelidade.tsx) lista os prêmios e avisa quantos pontos faltam para o próximo. Sem nenhum prêmio no banco, a tela mostra os três prêmios fixos.
 
 ### 15. notificacoes
-- **Campos:** id, titulo, descricao, icone, criado_em.
+- **Campos:** id, titulo, descricao, icone, criado_em, ativo.
+- **Como é preenchida:** os funcionários enviam os avisos na aba Avisos da Área do funcionário.
 - **Onde age:** [app/(tabs)/notificacoes.tsx](../app/(tabs)/notificacoes.tsx) lista as notificações.
 
 ### 16. usuario_notificacoes
@@ -150,6 +166,8 @@ erDiagram
     produtos ||--o{ carrinho_itens : vai
     produtos ||--o{ pedido_itens : aparece
     produtos ||--o{ favoritos : marcado
+    usuarios ||--o{ avaliacoes : avalia
+    produtos ||--o{ avaliacoes : recebe
     pedidos ||--o{ pedido_itens : contem
     cupons ||--o{ usuario_cupons : distribuido
     notificacoes ||--o{ usuario_notificacoes : enviada
@@ -178,8 +196,8 @@ flowchart LR
   - o texto digitado na busca e a categoria selecionada;
   - o tamanho e a quantidade antes de adicionar ao carrinho.
 
-## Usuário de teste
+## Primeiro uso
 
-O script já cria um usuário para testar quando o back-end existir:
-- **E-mail:** fulano@email.com
-- **Senha:** 123456 (no banco ela fica criptografada com bcrypt)
+O banco começa vazio. Para testar:
+1. Na tela de login, toque em **Área do funcionário**, digite o código `expressadmin` e cadastre os produtos, os cupons, os avisos e os prêmios.
+2. Volte ao login, toque em **Criar conta** e cadastre um cliente.

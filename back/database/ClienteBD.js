@@ -4,6 +4,10 @@ const path = require('path')
 
 const ERRO_BANCO = 'Erro ao acessar o banco de dados. Confira se o MySQL está ligado.'
 
+// Tamanhos fixos do app: quanto cada um soma ao preço cadastrado.
+// P, M e G são os copos das bebidas; U é o tamanho único (doces, salgados e promoções).
+const SQL_TAMANHOS = "insert ignore into tamanhos (sigla, nome, acrescimo) values ('P', '200 ml', 0), ('M', '300 ml', 2), ('G', '400 ml', 4), ('U', 'Único', 0)"
+
 // Tudo o que é do cliente logado: pedidos, endereços, favoritos, cartões,
 // perfil (preferências e pontos) e notificações.
 class ClienteBD{
@@ -117,7 +121,7 @@ class ClienteBD{
     // ---------- PEDIDOS: telas pagamento e historicoPedidos ----------
 
     static getPedidos(usuario, callback){
-        var sql = 'select pe.id, date_format(pe.criado_em, "%d/%m/%Y") as data, pe.status, pe.modo, pe.endereco_entrega, pe.total, pi.id as item_id, pi.tamanho, pi.opcional, pi.quantidade, pi.preco_unitario, pr.nome, pr.descricao_curta, pr.imagem from pedidos pe join pedido_itens pi on pi.pedido_id = pe.id join produtos pr on pr.id = pi.produto_id where pe.usuario_id = ? order by pe.id desc, pi.id'
+        var sql = 'select pe.id, date_format(pe.criado_em, "%d/%m/%Y") as data, pe.status, pe.modo, pe.endereco_entrega, pe.total, pi.id as item_id, pi.produto_id, pi.tamanho, pi.opcional, pi.quantidade, pi.preco_unitario, pr.nome, pr.descricao_curta, pr.imagem from pedidos pe join pedido_itens pi on pi.pedido_id = pe.id join produtos pr on pr.id = pi.produto_id where pe.usuario_id = ? order by pe.id desc, pi.id'
 
         ClienteBD.rodar(sql, usuario, (resultado)=>{
             if(resultado.error){
@@ -145,6 +149,7 @@ class ClienteBD{
 
                 pedido.itens.push({
                     id: String(linha.item_id),
+                    produtoId: String(linha.produto_id),
                     nome: linha.nome,
                     desc: linha.descricao_curta,
                     tamanho: linha.tamanho,
@@ -185,6 +190,10 @@ class ClienteBD{
 
             var pedidoId = results.insertId
 
+            // O banco começa vazio: os tamanhos são criados no primeiro pedido
+            // (pedido_itens só aceita tamanho que exista na tabela tamanhos)
+            connection.query(SQL_TAMANHOS)
+
             // O carrinho do app guarda o nome do produto, então o id é achado pelo nome
             // (se um produto removido tiver o mesmo nome, o ativo vem primeiro)
             var sqlItem = 'insert into pedido_itens (pedido_id, produto_id, tamanho, opcional, quantidade, preco_unitario) select ?, id, ?, ?, ?, ? from produtos where nome = ? order by ativo desc limit 1'
@@ -206,6 +215,52 @@ class ClienteBD{
             // O end() espera os comandos de cima terminarem antes de fechar
             connection.end()
             callback({'message':'Pedido salvo!', 'pontos':pontos})
+        })
+    }
+
+    // ---------- AVALIAÇÕES: tela historicoPedidos ----------
+
+    // As notas que o cliente já deu, ex.: [{produto_id: 3, nota: 5}]
+    static getAvaliacoes(usuario, callback){
+        ClienteBD.rodar('select produto_id, nota from avaliacoes where usuario_id = ?', usuario, callback)
+    }
+
+    // dados.produto = id do produto, dados.nota = 0 a 5 estrelas
+    static avaliar(dados, callback){
+        var nota = Number(dados.nota)
+
+        if(!dados.usuario || !dados.produto || !Number.isInteger(nota) || nota < 0 || nota > 5){
+            return callback({'error':'Escolha de 0 a 5 estrelas.'})
+        }
+
+        const connection = ClienteBD.connect()
+
+        // Só pode avaliar o produto que já pediu
+        var sqlPediu = 'select pi.id from pedido_itens pi join pedidos pe on pe.id = pi.pedido_id where pe.usuario_id = ? and pi.produto_id = ? limit 1'
+
+        connection.query(sqlPediu, [dados.usuario, dados.produto], (error, results)=>{
+            if(error){
+                connection.end()
+                return callback({'error':ERRO_BANCO})
+            }
+
+            if(results.length == 0){
+                connection.end()
+                return callback({'error':'Você só pode avaliar o que já pediu.'})
+            }
+
+            // Cada cliente tem uma nota por produto: se já avaliou, a nota é trocada
+            var sql = 'insert into avaliacoes (usuario_id, produto_id, nota) values (?, ?, ?) on duplicate key update nota = ?'
+
+            connection.query(sql, [dados.usuario, dados.produto, nota, nota], (error)=>{
+                connection.end()
+
+                if(error){
+                    return callback({'error':ERRO_BANCO})
+                }
+
+                callback({'message':'Obrigado pela avaliação!'})
+            })
         })
     }
 
@@ -240,7 +295,7 @@ class ClienteBD{
     // ---------- FAVORITOS: coração do menu e do produto, aba favoritos ----------
 
     static getFavoritos(usuario, callback){
-        var sql = 'select distinct p.id, p.nome, p.descricao_curta, p.nota, p.preco, p.imagem from favoritos f join produtos p on p.id = f.produto_id where f.usuario_id = ? and f.ativo = true and p.ativo = true'
+        var sql = 'select distinct p.id, p.nome, p.descricao_curta, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota, p.preco, p.imagem, c.nome as categoria from favoritos f join produtos p on p.id = f.produto_id join categorias c on c.id = p.categoria_id where f.usuario_id = ? and f.ativo = true and p.ativo = true and p.disponivel = true'
         ClienteBD.rodar(sql, usuario, callback)
     }
 
@@ -285,7 +340,7 @@ class ClienteBD{
 
     // Todas as notificações da loja. "lida" vem da tabela usuario_notificacoes.
     static getNotificacoes(usuario, callback){
-        var sql = 'select n.id, n.titulo, n.descricao, n.icone, un.lida from notificacoes n left join usuario_notificacoes un on un.notificacao_id = n.id and un.usuario_id = ? order by n.id desc'
+        var sql = 'select n.id, n.titulo, n.descricao, n.icone, un.lida from notificacoes n left join usuario_notificacoes un on un.notificacao_id = n.id and un.usuario_id = ? where n.ativo = true order by n.id desc'
         ClienteBD.rodar(sql, usuario, callback)
     }
 

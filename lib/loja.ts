@@ -5,10 +5,13 @@
 import { Platform } from 'react-native';
 import { buscar, enviar } from './api';
 
-export type Tamanho = 'P' | 'M' | 'G';
+// P, M e G só para bebidas. U = tamanho único (doces, salgados e promoções).
+export type Tamanho = 'P' | 'M' | 'G' | 'U';
 
 export type ItemCarrinho = {
   id: string;
+  // Só nos itens do histórico (vem do banco), usado para avaliar o produto
+  produtoId?: string;
   nome: string;
   desc: string;
   tamanho: Tamanho;
@@ -24,6 +27,7 @@ export type ProdutoFavorito = {
   nota: string;
   preco: string;
   imagem: string;
+  categoria?: string;
 };
 
 export type Endereco = {
@@ -63,6 +67,8 @@ export type ProdutoCatalogo = {
   precoNovo: string;
   categoria: CategoriaProduto;
   imagem: string;
+  // false = esgotado (só aparece na tela de funcionários)
+  disponivel?: boolean;
 };
 
 export type CupomLoja = {
@@ -86,13 +92,18 @@ export type Usuario = {
 
 // --- PREÇOS ---
 
-export const NOMES_TAMANHO = { P: 'Pequeno', M: 'Médio', G: 'Grande' };
+export const NOMES_TAMANHO = { P: '200 ml', M: '300 ml', G: '400 ml', U: 'Único' };
 
-// Quanto cada tamanho soma ao preço do copo pequeno
-const ACRESCIMO_TAMANHO = { P: 0, M: 2, G: 4 };
+// Quanto cada tamanho soma ao preço cadastrado (o preço do copo de 200 ml)
+const ACRESCIMO_TAMANHO = { P: 0, M: 2, G: 4, U: 0 };
 
 export function precoPorTamanho(precoBase: number, tamanho: Tamanho) {
   return precoBase + ACRESCIMO_TAMANHO[tamanho];
+}
+
+// Só bebidas têm tamanho (começa no copo de 200 ml). O resto é tamanho único.
+export function tamanhoInicial(categoria?: string): Tamanho {
+  return categoria === 'Bebidas' ? 'P' : 'U';
 }
 
 export function paraNumero(preco: string) {
@@ -103,8 +114,38 @@ export function formatarPreco(valor: number) {
   return 'R$' + valor.toFixed(2).replace('.', ',');
 }
 
-// Código da área de funcionários. Vale só no app, enquanto ele estiver aberto.
-export const CODIGO_FUNCIONARIO = 'DAILY';
+// --- CAMPOS NUMÉRICOS ---
+// Usadas no onChangeText: o que não for número some assim que é digitado.
+
+// Só os dígitos: "12a3" vira "123"
+export function soNumeros(texto: string) {
+  return texto.replace(/\D/g, '');
+}
+
+// Dígitos e uma vírgula só (o ponto vira vírgula): "12.9a0" vira "12,90"
+export function soNumerosComVirgula(texto: string) {
+  const partes = texto.replace(/\./g, ',').replace(/[^0-9,]/g, '').split(',');
+  if (partes.length === 1) {
+    return partes[0];
+  }
+  return partes[0] + ',' + partes.slice(1).join('');
+}
+
+// Só dígitos e coloca as barras sozinho: "1226" vira "12/26" e "31122026" vira "31/12/2026"
+export function formatarData(texto: string) {
+  const numeros = soNumeros(texto).slice(0, 8);
+  if (numeros.length > 4) {
+    return numeros.slice(0, 2) + '/' + numeros.slice(2, 4) + '/' + numeros.slice(4);
+  }
+  if (numeros.length > 2) {
+    return numeros.slice(0, 2) + '/' + numeros.slice(2);
+  }
+  return numeros;
+}
+
+// Código da área de funcionários (maiúsculas ou minúsculas tanto faz).
+// Vale só no app, enquanto ele estiver aberto.
+export const CODIGO_FUNCIONARIO = 'EXPRESSADMIN';
 
 function acharCupom(codigo: string) {
   return loja.cupons.find((item) => item.codigo.toUpperCase() === codigo.trim().toUpperCase());
@@ -151,13 +192,6 @@ function lerUsuarioSalvo() {
 
 // --- DADOS ---
 
-// Fotos usadas só quando o servidor está desligado
-const IMG_CAPUCCINO = 'https://images.unsplash.com/photo-1534778101976-62847782c213?q=80&w=400&auto=format&fit=crop';
-const IMG_CROISSANT = 'https://images.unsplash.com/photo-1550617931-e17a7b70dce2?q=80&w=400&auto=format&fit=crop';
-const IMG_CHEESECAKE = 'https://images.unsplash.com/photo-1533134242443-d4fd01530ae1?q=80&w=400&auto=format&fit=crop';
-const IMG_MOCHA = 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?q=80&w=400&auto=format&fit=crop';
-const IMG_COMBO = 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?q=80&w=400&auto=format&fit=crop';
-
 export const loja = {
   // Preenchido no login (vem do back-end)
   usuario: lerUsuarioSalvo(),
@@ -165,23 +199,9 @@ export const loja = {
   // Liberado na tela de funcionários depois do código
   acessoFuncionario: false,
 
-  // Cardápio e cupons de reserva, usados só se o servidor estiver desligado
-  produtos: [
-    { id: '1', nome: 'Capuccino clássico', desc: 'Leite vaporizado e expresso cremoso', nota: '4.9', precoAntigo: '18,90', precoNovo: '13,90', categoria: 'Bebidas', imagem: IMG_CAPUCCINO },
-    { id: '2', nome: 'Latte + Cheesecake', desc: 'Latte suave com fatia de frutas vermelhas', nota: '4.7', precoAntigo: '35,80', precoNovo: '28,90', categoria: 'Doces', imagem: IMG_CHEESECAKE },
-    { id: '3', nome: 'Combo Lanche Leve', desc: 'Sanduíche natural e chá gelado de pêssego', nota: '4.6', precoAntigo: '30,80', precoNovo: '25,90', categoria: 'Salgados', imagem: IMG_COMBO },
-    { id: '4', nome: 'Mocha Especial', desc: 'Leite vaporizado, calda de chocolate belga', nota: '4.7', precoAntigo: '15,90', precoNovo: '12,90', categoria: 'Bebidas', imagem: IMG_MOCHA },
-    { id: '5', nome: 'Combo Choc. Quente', desc: 'Chocolate quente cremoso e biscoitos', nota: '4.9', precoAntigo: '35,80', precoNovo: '29,90', categoria: 'Bebidas', imagem: '' },
-    { id: '6', nome: 'Croissant Presunto', desc: 'Massa folhada recheada com queijo derretido', nota: '4.8', precoAntigo: '17,90', precoNovo: '14,90', categoria: 'Salgados', imagem: IMG_CROISSANT },
-    { id: '7', nome: 'Espresso + Cookie', desc: 'Espresso duplo e cookie com gotas de cacau', nota: '4.8', precoAntigo: '22,00', precoNovo: '16,50', categoria: 'Doces', imagem: '' },
-    { id: '8', nome: 'Frappuccino Caramelo', desc: 'Café batido gelado com chantilly e calda', nota: '4.9', precoAntigo: '24,90', precoNovo: '19,90', categoria: 'Bebidas', imagem: '' },
-  ] as ProdutoCatalogo[],
-
-  cupons: [
-    { id: '1', codigo: 'CAFE10', titulo: '10% OFF', descricao: 'Desconto de 10% em qualquer pedido', tipo: 'porcentagem', valor: 10, validade: '31/12/2026' },
-    { id: '2', codigo: 'FRETEGRÁTIS', titulo: 'Entrega grátis', descricao: 'R$ 5,00 de desconto na entrega', tipo: 'valor', valor: 5, validade: '31/12/2026' },
-    { id: '3', codigo: 'ANIVERSÁRIO', titulo: 'Sobremesa grátis', descricao: 'Uma sobremesa grátis (R$ 11,90) no mês do seu aniversário', tipo: 'valor', valor: 11.9, validade: '31/12/2026' },
-  ] as CupomLoja[],
+  // Cardápio e cupons: começam vazios e vêm do banco (cadastrados na Área do funcionário)
+  produtos: [] as ProdutoCatalogo[],
+  cupons: [] as CupomLoja[],
 
   // O carrinho fica só na memória do app
   carrinho: [] as ItemCarrinho[],
@@ -292,12 +312,21 @@ function textoPreco(valor: any) {
   return Number(valor).toFixed(2).replace('.', ',');
 }
 
+// Média das avaliações: 4.666 vira "4.7". Sem nenhuma avaliação, aparece "Novo".
+function textoNota(valor: any) {
+  if (valor === null || valor === undefined) {
+    return 'Novo';
+  }
+  return Number(valor).toFixed(1);
+}
+
 // --- BUSCAR NO BANCO ---
 // Cada função pede a lista ao back-end, guarda no objeto loja e devolve a lista.
 // Se o servidor estiver desligado, devolve o que já estava guardado.
 
-export function buscarProdutos() {
-  return buscar('/produtos')
+// todos = true (tela de funcionários): traz também os produtos esgotados
+export function buscarProdutos(todos = false) {
+  return buscar(todos ? '/produtos?todos=1' : '/produtos')
     .then((lista) => {
       if (!Array.isArray(lista)) {
         return [...loja.produtos];
@@ -307,11 +336,12 @@ export function buscarProdutos() {
         id: String(item.id),
         nome: item.nome,
         desc: item.descricao_curta,
-        nota: Number(item.nota).toFixed(1),
+        nota: textoNota(item.nota),
         precoAntigo: textoPreco(item.preco_antigo),
         precoNovo: textoPreco(item.preco),
         categoria: item.categoria,
         imagem: item.imagem ? item.imagem : '',
+        disponivel: item.disponivel !== 0,
       }));
 
       return [...loja.produtos];
@@ -354,9 +384,10 @@ export function buscarFavoritos() {
       loja.favoritos = lista.map((item) => ({
         nome: item.nome,
         desc: item.descricao_curta,
-        nota: Number(item.nota).toFixed(1),
+        nota: textoNota(item.nota),
         preco: textoPreco(item.preco),
         imagem: item.imagem ? item.imagem : '',
+        categoria: item.categoria,
       }));
 
       return [...loja.favoritos];

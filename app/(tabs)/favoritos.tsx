@@ -33,6 +33,7 @@ export default function FavoritosScreen() {
         nota: item.nota,
         preco: item.preco,
         imagem: item.imagem,
+        categoria: item.categoria,
       },
     });
   }
