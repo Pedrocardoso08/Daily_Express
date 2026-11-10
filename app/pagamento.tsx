@@ -76,6 +76,7 @@ export default function PagamentoScreen() {
       subtotal: loja.subtotal,
       desconto: loja.desconto,
       total: total,
+      usarVale: loja.usarVale,
       itens: loja.carrinho,
     })
       .then((dados) => {
@@ -90,6 +91,7 @@ export default function PagamentoScreen() {
         loja.cupom = '';
         loja.subtotal = 0;
         loja.desconto = 0;
+        loja.usarVale = false;
         router.replace('/finalizado');
       })
       .catch(() => {

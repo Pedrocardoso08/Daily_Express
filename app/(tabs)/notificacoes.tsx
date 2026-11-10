@@ -5,7 +5,7 @@ import {
   View,
   TouchableOpacity,
   Image,
-  FlatList,
+  SectionList,
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,16 +46,41 @@ export default function NotificacoesScreen() {
     }, [])
   );
 
+  const naoLidas = notificacoes.filter((item) => !item.lida);
+  const lidas = notificacoes.filter((item) => item.lida);
+
+  // Seções vazias não aparecem
+  const secoes = [
+    { titulo: 'Não lidas (' + naoLidas.length + ')', data: naoLidas },
+    { titulo: 'Lidas', data: lidas },
+  ].filter((secao) => secao.data.length > 0);
+
   // Fica "Tudo lido" quando nenhuma notificação está sem ler
-  const todasLidas = notificacoes.length > 0 && notificacoes.every((item) => item.lida);
+  const todasLidas = notificacoes.length > 0 && naoLidas.length === 0;
 
   const marcarComoLidas = () => {
     enviar('/lerNotificacoes', { usuario: idUsuario() })
-      .then(() => {
-        setNotificacoes(notificacoes.map((item) => ({ ...item, lida: true })));
+      .then((resposta) => {
+        if (!resposta.error) {
+          setNotificacoes(notificacoes.map((item) => ({ ...item, lida: true })));
+        }
       })
       .catch(() => {});
   };
+
+  // Tocar numa notificação não lida passa ela para as lidas
+  function marcarUmaComoLida(notificacao: Notificacao) {
+    if (notificacao.lida) {
+      return;
+    }
+    enviar('/lerNotificacao', { usuario: idUsuario(), id: notificacao.id })
+      .then((resposta) => {
+        if (!resposta.error) {
+          setNotificacoes(notificacoes.map((item) => (item.id === notificacao.id ? { ...item, lida: true } : item)));
+        }
+      })
+      .catch(() => {});
+  }
 
   function irPara(rota: '/pedidosAtivos' | '/historicoPedidos' | '/ods12' | '/cupons' | '/endereco' | '/ajuda' | '/faleconosco' | '/sobrenos') {
     setMenuAberto(false);
@@ -108,13 +133,23 @@ export default function NotificacoesScreen() {
 
   // --- CARD INDIVIDUAL DE NOTIFICAÇÃO ---
   const renderItem = ({ item }: { item: Notificacao }) => (
-    <View style={styles.notificationCard}>
+    <TouchableOpacity
+      style={[styles.notificationCard, !item.lida && styles.notificationCardUnread]}
+      onPress={() => marcarUmaComoLida(item)}
+      activeOpacity={item.lida ? 1 : 0.8}
+    >
       <View style={styles.cardHeaderRow}>
         <Ionicons name={item.icone} size={22} color={cor('#4A3525')} />
         <Text style={styles.cardTitle}>{item.titulo}</Text>
+        {!item.lida ? <View style={styles.unreadDot} /> : null}
       </View>
       <Text style={styles.cardDescription}>{item.descricao}</Text>
-    </View>
+      {!item.lida ? <Text style={styles.unreadHint}>Toque para marcar como lida</Text> : null}
+    </TouchableOpacity>
+  );
+
+  const renderSectionHeader = ({ section }: { section: { titulo: string } }) => (
+    <Text style={styles.sectionTitle}>{section.titulo}</Text>
   );
 
   return (
@@ -215,11 +250,13 @@ export default function NotificacoesScreen() {
       </Modal>
 
       {/* 2. LISTA DE NOTIFICAÇÕES */}
-      <FlatList
-        data={notificacoes}
+      <SectionList
+        sections={secoes}
         keyExtractor={(item) => String(item.id)}
         ListHeaderComponent={renderHeader}
         renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
       />
@@ -322,6 +359,30 @@ const styles = criarEstilos({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
+  },
+  notificationCardUnread: {
+    backgroundColor: '#FFFDF9',
+    borderWidth: 1.5,
+    borderColor: '#4A3525',
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#8B2E2E',
+  },
+  unreadHint: {
+    fontSize: 10,
+    color: '#8C837A',
+    marginTop: 6,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#4A3525',
+    marginHorizontal: 24,
+    marginTop: 6,
+    marginBottom: 10,
   },
   cardHeaderRow: {
     flexDirection: 'row',

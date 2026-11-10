@@ -28,6 +28,7 @@ export default function FavoritosScreen() {
     router.push({
       pathname: '/produto',
       params: {
+        id: item.id,
         nome: item.nome,
         descricao: item.desc,
         nota: item.nota,
@@ -37,6 +38,8 @@ export default function FavoritosScreen() {
         mlP: item.ml.P,
         mlM: item.ml.M,
         mlG: item.ml.G,
+        sabores: item.sabores.join(', '),
+        temAcucar: item.temAcucar ? '1' : '0',
       },
     });
   }

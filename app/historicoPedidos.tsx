@@ -14,12 +14,15 @@ import { estiloLogo, logo, origemImagem } from '../lib/imagens';
 import {
   adicionarAoCarrinho,
   buscarPedidos,
+  buscarProdutos,
+  detalheItem,
   formatarPreco,
   idUsuario,
   ItemCarrinho,
   loja,
-  nomeTamanho,
+  paraNumero,
   Pedido,
+  precoPorTamanho,
 } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
@@ -84,21 +87,47 @@ export default function HistoricoPedidosScreen() {
     pedido.itens.some((item) => item.nome.toLowerCase().includes(busca.toLowerCase()))
   );
 
-  // Coloca os itens do pedido no carrinho e abre o carrinho
+  // Coloca no carrinho os itens do pedido que ainda estão no cardápio, com o preço de hoje.
+  // Produto removido, esgotado ou sabor que saiu do cardápio fica de fora.
   function pedirNovamente(pedido: Pedido) {
-    pedido.itens.forEach((item) => {
-      adicionarAoCarrinho({
-        nome: item.nome,
-        desc: item.desc,
-        tamanho: item.tamanho,
-        ml: item.ml,
-        opcional: item.opcional,
-        precoUnitario: item.precoUnitario,
-        qtd: item.qtd,
-        imagem: item.imagem,
+    setAviso('');
+
+    buscarProdutos().then((cardapio) => {
+      const foraDoCardapio: string[] = [];
+
+      pedido.itens.forEach((item) => {
+        const produto = cardapio.find((p) => p.id === item.produtoId);
+        const temSabor = item.opcional && item.opcional !== '---';
+        const saborSaiu = produto && produto.sabores.length > 0 && (!temSabor || !produto.sabores.includes(item.opcional));
+
+        if (!produto || saborSaiu) {
+          foraDoCardapio.push(item.nome);
+          return;
+        }
+
+        adicionarAoCarrinho({
+          produtoId: produto.id,
+          nome: produto.nome,
+          desc: produto.desc,
+          tamanho: item.tamanho,
+          ml: item.tamanho === 'U' ? null : produto.ml[item.tamanho],
+          opcional: produto.sabores.length > 0 ? item.opcional : '---',
+          precoUnitario: precoPorTamanho(paraNumero(produto.precoNovo), item.tamanho),
+          qtd: item.qtd,
+          imagem: produto.imagem,
+        });
       });
+
+      if (foraDoCardapio.length === pedido.itens.length) {
+        setAviso('Nenhum produto desse pedido está disponível agora.');
+        return;
+      }
+      if (foraDoCardapio.length > 0) {
+        setAviso('Fora do cardápio agora: ' + foraDoCardapio.join(', ') + '. O resto foi para o carrinho.');
+        return;
+      }
+      router.push('/carrinho');
     });
-    router.push('/carrinho');
   }
 
   const renderHeader = () => (
@@ -157,7 +186,7 @@ export default function HistoricoPedidosScreen() {
             <Image source={origemImagem(prod.imagem, prod.nome)} style={styles.productImage} />
             <View style={styles.productInfo}>
               <Text style={styles.productName}>
-                {prod.qtd}x {prod.nome} ({nomeTamanho(prod.tamanho, prod.ml)})
+                {prod.qtd}x {prod.nome} ({detalheItem(prod)})
               </Text>
               {prod.produtoId ? (
                 <View style={styles.starsRow}>

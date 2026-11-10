@@ -8,9 +8,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { buscar } from '../lib/api';
+import { buscar, enviar } from '../lib/api';
 import { estiloLogo, logo } from '../lib/imagens';
-import { buscarPerfil } from '../lib/loja';
+import { buscarPerfil, formatarPreco, idUsuario, PONTOS_VALE, VALOR_VALE } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function FidelidadeScreen() {
@@ -26,16 +26,41 @@ export default function FidelidadeScreen() {
   }
 
   const [pontos, setPontos] = useState(0);
+  // Vale de R$15 já resgatado e ainda não usado
+  const [temVale, setTemVale] = useState(false);
+  const [avisoVale, setAvisoVale] = useState('');
+  const [resgatando, setResgatando] = useState(false);
   // Prêmios cadastrados na Área do funcionário (vêm do menor para o maior)
   const [recompensas, setRecompensas] = useState<{ id: number; nome: string; pontos: number }[]>([]);
 
-  // Lê os pontos e os prêmios do banco quando a tela abre
-  useEffect(() => {
+  function lerPontos() {
     buscarPerfil().then((perfil) => {
       if (perfil) {
         setPontos(perfil.pontos_fidelidade);
+        setTemVale(perfil.tem_vale == 1);
       }
     });
+  }
+
+  function resgatarVale() {
+    setResgatando(true);
+    setAvisoVale('');
+
+    enviar('/resgatarVale', { usuario: idUsuario() })
+      .then((resposta) => {
+        setResgatando(false);
+        setAvisoVale(resposta.error ? resposta.error : resposta.message);
+        lerPontos();
+      })
+      .catch(() => {
+        setResgatando(false);
+        setAvisoVale('Não foi possível conectar ao servidor.');
+      });
+  }
+
+  // Lê os pontos e os prêmios do banco quando a tela abre
+  useEffect(() => {
+    lerPontos();
     buscar('/recompensas')
       .then((lista) => {
         if (Array.isArray(lista)) {
@@ -107,6 +132,34 @@ export default function FidelidadeScreen() {
           </View>
           <View style={styles.bubbleTail} />
         </View>
+
+        <View style={styles.valeCard}>
+          <Ionicons name="ticket-outline" size={28} color={cor('#4A3525')} />
+          <View style={styles.valeInfo}>
+            <Text style={styles.valeTitle}>Vale-compra de até {formatarPreco(VALOR_VALE)}</Text>
+            {temVale ? (
+              <Text style={styles.valeText}>Você tem um vale! Marque "Usar meu vale" no carrinho da próxima compra.</Text>
+            ) : (
+              <Text style={styles.valeText}>Troque {PONTOS_VALE} pontos por um desconto numa compra.</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Com um vale sem usar, o botão some até ele ser gasto */}
+        {!temVale ? (
+          <TouchableOpacity
+            style={[styles.valeButton, (pontos < PONTOS_VALE || resgatando) && styles.valeButtonDisabled]}
+            onPress={resgatarVale}
+            disabled={pontos < PONTOS_VALE || resgatando}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.valeButtonText}>
+              {pontos >= PONTOS_VALE ? 'Resgatar por ' + PONTOS_VALE + ' pontos' : 'Faltam ' + (PONTOS_VALE - pontos) + ' pontos'}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {avisoVale !== '' ? <Text style={styles.valeAviso}>{avisoVale}</Text> : null}
 
         <View style={styles.divider} />
 
@@ -261,6 +314,56 @@ const styles = criarEstilos({
     borderRightColor: 'transparent',
     borderTopColor: '#F6EBDD',
     marginLeft: 18,
+  },
+
+  valeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F6EBDD',
+    borderRadius: 14,
+    marginHorizontal: 26,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  valeInfo: {
+    flex: 1,
+  },
+  valeTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#3B291A',
+    marginBottom: 2,
+  },
+  valeText: {
+    fontSize: 12,
+    color: '#2A1F17',
+    lineHeight: 17,
+  },
+  valeButton: {
+    backgroundColor: '#4A3525',
+    borderRadius: 14,
+    marginHorizontal: 26,
+    marginBottom: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  valeButtonDisabled: {
+    opacity: 0.5,
+  },
+  valeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  valeAviso: {
+    fontSize: 13,
+    color: '#3B291A',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginHorizontal: 26,
+    marginBottom: 16,
   },
 
   divider: {

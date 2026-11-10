@@ -4,6 +4,12 @@ const path = require('path')
 
 const ERRO_BANCO = 'Erro ao acessar o banco de dados. Confira se o MySQL está ligado.'
 
+// Vale da fidelidade: 1000 pontos viram um desconto de até R$15 numa compra
+const PONTOS_VALE = 1000
+
+// Status em que o cliente ainda pode cancelar
+const STATUS_CANCELAVEIS = ['Preparando', 'A caminho']
+
 // Tamanhos fixos do app: quanto cada um soma ao preço cadastrado.
 // P, M e G são os copos das bebidas (os ml de cada um ficam no produto); U é o tamanho único (doces, salgados e promoções).
 const SQL_TAMANHOS = "insert ignore into tamanhos (sigla, nome, acrescimo) values ('P', 'Pequeno', 0), ('M', 'Médio', 2), ('G', 'Grande', 4), ('U', 'Único', 0)"
@@ -48,7 +54,7 @@ class ClienteBD{
     // ---------- PERFIL: telas perfil, personalizacao, configuracoes e fidelidade ----------
 
     static getPerfil(usuario, callback){
-        var sql = 'select u.nome, u.email, u.foto, u.pontos_fidelidade, p.tipo_leite, p.acucar, p.receber_promocoes, p.notificacoes_ativas, p.localizacao_ativa, p.idioma, p.volume from usuarios u left join preferencias p on p.usuario_id = u.id where u.id = ?'
+        var sql = 'select u.nome, u.email, u.foto, u.pontos_fidelidade, u.tem_vale, p.tipo_leite, p.acucar, p.receber_promocoes, p.notificacoes_ativas, p.localizacao_ativa, p.idioma from usuarios u left join preferencias p on p.usuario_id = u.id where u.id = ?'
 
         ClienteBD.rodar(sql, usuario, (resultado)=>{
             if(resultado.error){
@@ -165,6 +171,7 @@ class ClienteBD{
         })
     }
 
+    // dados.usarVale = true: o cliente usou o vale de R$15 da fidelidade (já está somado no desconto)
     static addPedido(dados, callback){
         if(!dados.usuario || !dados.itens || dados.itens.length == 0){
             return callback({'error':'O carrinho está vazio.'})
@@ -172,71 +179,197 @@ class ClienteBD{
 
         const connection = ClienteBD.connect()
 
-        var pedido = {
-            usuario_id: dados.usuario,
-            modo: dados.modo,
-            endereco_entrega: dados.endereco ? dados.endereco : null,
-            forma_pagamento: dados.formaPagamento,
-            cupom: dados.cupom ? dados.cupom : null,
-            subtotal: dados.subtotal,
-            desconto: dados.desconto,
-            total: dados.total
-        }
+        // Antes de criar o pedido, confere se todos os produtos ainda estão na loja e disponíveis.
+        // O item vem com o id do produto; carrinhos antigos só têm o nome.
+        var ids = dados.itens.filter((item)=> item.produtoId).map((item)=> Number(item.produtoId))
+        var nomes = dados.itens.filter((item)=> !item.produtoId).map((item)=> item.nome)
+        var sqlProdutos = 'select id, nome from produtos where ativo = true and disponivel = true and (id in (?) or nome in (?))'
 
-        connection.query('insert into pedidos set ?', pedido, (error, results)=>{
+        connection.query(sqlProdutos, [ids.length > 0 ? ids : [0], nomes.length > 0 ? nomes : ['']], (error, produtos)=>{
             if(error){
                 connection.end()
-                return callback({'error':'Não foi possível salvar o pedido.'})
+                return callback({'error':ERRO_BANCO})
             }
 
-            var pedidoId = results.insertId
+            function acharProduto(item){
+                if(item.produtoId){
+                    return produtos.find((produto)=> produto.id == item.produtoId)
+                }
+                return produtos.find((produto)=> produto.nome == item.nome)
+            }
 
-            // O banco começa vazio: os tamanhos são criados no primeiro pedido
-            // (pedido_itens só aceita tamanho que exista na tabela tamanhos)
-            connection.query(SQL_TAMANHOS)
+            var indisponivel = dados.itens.find((item)=> !acharProduto(item))
+            if(indisponivel){
+                connection.end()
+                return callback({'error':'"' + indisponivel.nome + '" não está mais disponível. Tire do carrinho para continuar.'})
+            }
 
-            // O carrinho do app guarda o nome do produto, então o id é achado pelo nome
-            // (se um produto removido tiver o mesmo nome, o ativo vem primeiro)
-            // O ml do copo fica salvo no item, para o histórico não mudar se o funcionário trocar depois
-            var sqlItem = 'insert into pedido_itens (pedido_id, produto_id, tamanho, ml, opcional, quantidade, preco_unitario) select ?, id, ?, ?, ?, ?, ? from produtos where nome = ? order by ativo desc limit 1'
+            if(!dados.usarVale){
+                return salvarPedido()
+            }
 
-            dados.itens.forEach((item)=>{
-                connection.query(sqlItem, [pedidoId, item.tamanho, item.ml ? item.ml : null, item.opcional, item.qtd, item.precoUnitario, item.nome])
+            // O vale só é gasto se o cliente ainda tiver um
+            connection.query('update usuarios set tem_vale = false where id = ? and tem_vale = true', dados.usuario, (error, resultado)=>{
+                if(error){
+                    connection.end()
+                    return callback({'error':ERRO_BANCO})
+                }
+                if(resultado.affectedRows == 0){
+                    connection.end()
+                    return callback({'error':'Você não tem vale para usar. Volte ao carrinho e desmarque o vale.'})
+                }
+                salvarPedido()
             })
 
-            // Cada cliente usa cada cupom uma vez só
-            if(dados.cupom){
-                var sqlCupom = 'insert into usuario_cupons (usuario_id, cupom_id, usado) select ?, id, true from cupons where codigo = ?'
-                connection.query(sqlCupom, [dados.usuario, dados.cupom])
+            // Se der erro depois de gastar o vale, ele volta para o cliente
+            function devolverVale(){
+                if(dados.usarVale){
+                    connection.query('update usuarios set tem_vale = true where id = ?', dados.usuario)
+                }
             }
 
-            // Cada R$1,00 gasto vale 10 pontos de fidelidade
-            var pontos = Math.round(dados.total * 10)
-            connection.query('update usuarios set pontos_fidelidade = pontos_fidelidade + ? where id = ?', [pontos, dados.usuario])
+            function salvarPedido(){
+                var pedido = {
+                    usuario_id: dados.usuario,
+                    modo: dados.modo,
+                    endereco_entrega: dados.endereco ? dados.endereco : null,
+                    forma_pagamento: dados.formaPagamento,
+                    cupom: dados.cupom ? dados.cupom : null,
+                    subtotal: dados.subtotal,
+                    desconto: dados.desconto,
+                    total: dados.total,
+                    usou_vale: dados.usarVale ? true : false
+                }
 
-            // O end() espera os comandos de cima terminarem antes de fechar
-            connection.end()
-            callback({'message':'Pedido salvo!', 'pontos':pontos})
+                connection.query('insert into pedidos set ?', pedido, (error, results)=>{
+                    if(error){
+                        devolverVale()
+                        connection.end()
+                        return callback({'error':'Não foi possível salvar o pedido.'})
+                    }
+
+                    var pedidoId = results.insertId
+
+                    // O banco começa vazio: os tamanhos são criados no primeiro pedido
+                    // (pedido_itens só aceita tamanho que exista na tabela tamanhos)
+                    connection.query(SQL_TAMANHOS)
+
+                    // Todos os itens num comando só. O ml do copo fica salvo no item,
+                    // para o histórico não mudar se o funcionário trocar depois.
+                    var linhas = dados.itens.map((item)=> [
+                        pedidoId,
+                        acharProduto(item).id,
+                        item.tamanho,
+                        item.ml ? item.ml : null,
+                        item.opcional ? item.opcional : '---',
+                        item.qtd,
+                        item.precoUnitario
+                    ])
+                    var sqlItens = 'insert into pedido_itens (pedido_id, produto_id, tamanho, ml, opcional, quantidade, preco_unitario) values ?'
+
+                    connection.query(sqlItens, [linhas], (error)=>{
+                        // Sem os itens o pedido não vale: ele é apagado e nada é cobrado
+                        if(error){
+                            connection.query('delete from pedidos where id = ?', pedidoId)
+                            devolverVale()
+                            connection.end()
+                            return callback({'error':'Não foi possível salvar os itens do pedido.'})
+                        }
+
+                        // Cada cliente usa cada cupom uma vez só
+                        if(dados.cupom){
+                            var sqlCupom = 'insert into usuario_cupons (usuario_id, cupom_id, usado) select ?, id, true from cupons where codigo = ?'
+                            connection.query(sqlCupom, [dados.usuario, dados.cupom])
+                        }
+
+                        // Cada R$1,00 gasto vale 10 pontos de fidelidade
+                        var pontos = Math.round(dados.total * 10)
+                        connection.query('update usuarios set pontos_fidelidade = pontos_fidelidade + ? where id = ?', [pontos, dados.usuario])
+
+                        // O end() espera os comandos de cima terminarem; só então o app recebe a resposta
+                        connection.end(()=>{
+                            callback({'message':'Pedido salvo!', 'pontos':pontos})
+                        })
+                    })
+                })
+            }
         })
     }
 
     // Só o dono do pedido cancela, e só enquanto ele está Preparando ou A caminho.
     // A loja fica com 30% e 70% volta para o cliente (só aparece na tela, não mexe em dinheiro).
+    // Os pontos que o pedido deu são tirados, e o cupom e o vale usados voltam para o cliente.
     static cancelarPedido(dados, callback){
         if(!dados.usuario || !dados.id){
             return callback({'error':'Pedido inválido.'})
         }
 
-        var sql = "update pedidos set status = 'Cancelado' where id = ? and usuario_id = ? and status in ('Preparando', 'A caminho')"
+        const connection = ClienteBD.connect()
 
-        ClienteBD.rodar(sql, [dados.id, dados.usuario], (resultado)=>{
+        var sqlBusca = 'select id, total, cupom, usou_vale from pedidos where id = ? and usuario_id = ? and status in (?)'
+
+        connection.query(sqlBusca, [dados.id, dados.usuario, STATUS_CANCELAVEIS], (error, results)=>{
+            if(error){
+                connection.end()
+                return callback({'error':ERRO_BANCO})
+            }
+            if(results.length == 0){
+                connection.end()
+                return callback({'error':'Esse pedido não pode mais ser cancelado.'})
+            }
+
+            var pedido = results[0]
+
+            // O "status in" de novo evita cancelar duas vezes se o funcionário mudar o status ao mesmo tempo
+            connection.query("update pedidos set status = 'Cancelado' where id = ? and status in (?)", [pedido.id, STATUS_CANCELAVEIS], (error, resultado)=>{
+                if(error || resultado.affectedRows == 0){
+                    connection.end()
+                    return callback({'error':'Esse pedido não pode mais ser cancelado.'})
+                }
+
+                // Os mesmos pontos que o pedido deu (10 por R$1,00), sem deixar o saldo negativo
+                var pontos = Math.round(Number(pedido.total) * 10)
+                connection.query('update usuarios set pontos_fidelidade = greatest(pontos_fidelidade - ?, 0) where id = ?', [pontos, dados.usuario])
+
+                var mensagem = 'Pedido #' + pedido.id + ' cancelado. 70% do valor volta para você e os ' + pontos + ' pontos dele foram retirados.'
+
+                if(pedido.cupom){
+                    var sqlCupom = 'delete uc from usuario_cupons uc join cupons c on c.id = uc.cupom_id where uc.usuario_id = ? and c.codigo = ?'
+                    connection.query(sqlCupom, [dados.usuario, pedido.cupom])
+                    mensagem += ' O cupom ' + pedido.cupom + ' pode ser usado de novo.'
+                }
+
+                if(pedido.usou_vale){
+                    connection.query('update usuarios set tem_vale = true where id = ?', dados.usuario)
+                    mensagem += ' O vale de R$15 voltou para você.'
+                }
+
+                // Responde só depois que os pontos, o cupom e o vale foram atualizados
+                connection.end(()=>{
+                    callback({'message':mensagem})
+                })
+            })
+        })
+    }
+
+    // ---------- FIDELIDADE: tela fidelidade ----------
+
+    // Troca 1000 pontos por um vale de até R$15, usado no carrinho. Um vale por vez.
+    static resgatarVale(dados, callback){
+        if(!dados.usuario){
+            return callback({'error':'Entre na sua conta de novo.'})
+        }
+
+        var sql = 'update usuarios set pontos_fidelidade = pontos_fidelidade - ?, tem_vale = true where id = ? and pontos_fidelidade >= ? and tem_vale = false'
+
+        ClienteBD.rodar(sql, [PONTOS_VALE, dados.usuario, PONTOS_VALE], (resultado)=>{
             if(resultado.error){
                 return callback(resultado)
             }
             if(resultado.affectedRows == 0){
-                return callback({'error':'Esse pedido não pode mais ser cancelado.'})
+                return callback({'error':'Você precisa de ' + PONTOS_VALE + ' pontos e não pode ter outro vale sem usar.'})
             }
-            callback({'message':'Pedido #' + dados.id + ' cancelado. 70% do valor volta para você.'})
+            callback({'message':'Vale de R$15 resgatado! Use no carrinho da próxima compra.'})
         })
     }
 
@@ -317,7 +450,7 @@ class ClienteBD{
     // ---------- FAVORITOS: coração do menu e do produto, aba favoritos ----------
 
     static getFavoritos(usuario, callback){
-        var sql = 'select distinct p.id, p.nome, p.descricao_curta, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota, p.preco, p.imagem, p.ml_p, p.ml_m, p.ml_g, c.nome as categoria from favoritos f join produtos p on p.id = f.produto_id join categorias c on c.id = p.categoria_id where f.usuario_id = ? and f.ativo = true and p.ativo = true and p.disponivel = true'
+        var sql = 'select distinct p.id, p.nome, p.descricao_curta, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota, p.preco, p.imagem, p.ml_p, p.ml_m, p.ml_g, p.sabores, p.tem_acucar, c.nome as categoria from favoritos f join produtos p on p.id = f.produto_id join categorias c on c.id = p.categoria_id where f.usuario_id = ? and f.ativo = true and p.ativo = true and p.disponivel = true'
         ClienteBD.rodar(sql, usuario, callback)
     }
 
@@ -381,6 +514,38 @@ class ClienteBD{
             }
 
             callback({'message':'Tudo lido.'})
+        })
+    }
+
+    // Uma notificação só (o cliente tocou nela). dados.id = id da notificação.
+    static lerNotificacao(dados, callback){
+        if(!dados.usuario || !dados.id){
+            return callback({'error':'Notificação inválida.'})
+        }
+
+        const connection = ClienteBD.connect()
+
+        connection.query('update usuario_notificacoes set lida = true where usuario_id = ? and notificacao_id = ?', [dados.usuario, dados.id], (error, resultado)=>{
+            if(error){
+                connection.end()
+                return callback({'error':ERRO_BANCO})
+            }
+
+            if(resultado.affectedRows > 0){
+                connection.end()
+                return callback({'message':'Lida.'})
+            }
+
+            // Primeira vez que o usuário mexe nessa notificação: a linha é criada já lida
+            connection.query('insert into usuario_notificacoes (usuario_id, notificacao_id, lida) values (?, ?, true)', [dados.usuario, dados.id], (error)=>{
+                connection.end()
+
+                if(error){
+                    return callback({'error':ERRO_BANCO})
+                }
+
+                callback({'message':'Lida.'})
+            })
         })
     }
 }

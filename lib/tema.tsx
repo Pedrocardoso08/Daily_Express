@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Modo escuro do app inteiro.
 // As telas continuam escrevendo as cores do modo claro; aqui cada cor clara
@@ -111,12 +112,28 @@ export function criarEstilos(estilos: any): any {
 
 const TemaContexto = createContext({ escuro: false, alternarTema: () => {} });
 
+// A escolha fica guardada no aparelho (no navegador, no localStorage) e volta ao recarregar
+const CHAVE_TEMA = 'modoEscuro';
+
 export function TemaProvider(props: any) {
   const [escuro, setEscuro] = useState(false);
+
+  // Começa no claro e troca assim que lê o que foi salvo
+  useEffect(() => {
+    AsyncStorage.getItem(CHAVE_TEMA)
+      .then((salvo) => {
+        if (salvo === '1') {
+          escuroAtual = true;
+          setEscuro(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   function alternarTema() {
     escuroAtual = !escuroAtual;
     setEscuro(escuroAtual);
+    AsyncStorage.setItem(CHAVE_TEMA, escuroAtual ? '1' : '0').catch(() => {});
   }
 
   return (

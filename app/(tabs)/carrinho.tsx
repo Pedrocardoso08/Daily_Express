@@ -14,12 +14,17 @@ import SeloOds12 from '../../components/SeloOds12';
 import { origemImagem } from '../../lib/imagens';
 import {
   buscarCupons,
+  buscarPerfil,
+  buscarProdutos,
   calcularDesconto,
   cupomSoDeEntrega,
   formatarPreco,
   ItemCarrinho,
   loja,
   nomeTamanho,
+  prefereSemAcucar,
+  produtoDoItem,
+  VALOR_VALE,
 } from '../../lib/loja';
 import { cor, criarEstilos, useTema } from '../../lib/tema';
  
@@ -41,12 +46,28 @@ export default function CarrinhoScreen() {
   const [mensagemCupom, setMensagemCupom] = useState('');
   const [aviso, setAviso] = useState('');
   const [perguntaAberta, setPerguntaAberta] = useState(false);
+  // Vale de R$15 resgatado na Fidelidade e se o cliente quer usar nesta compra
+  const [temVale, setTemVale] = useState(false);
+  const [usarVale, setUsarVale] = useState(loja.usarVale);
+  // Cliente que escolheu "Sem açúcar" na Personalização
+  const [semAcucar, setSemAcucar] = useState(false);
 
   // Sempre que a tela abre, pega o carrinho atualizado e o cupom escolhido na tela de Cupons
   useFocusEffect(
     useCallback(() => {
       setItens([...loja.carrinho]);
       buscarCupons();
+      // O cardápio diz quais produtos têm açúcar; o setItens redesenha os avisos quando ele chega
+      buscarProdutos().then(() => setItens([...loja.carrinho]));
+      buscarPerfil().then((perfil) => {
+        const vale = perfil ? perfil.tem_vale == 1 : false;
+        setTemVale(vale);
+        setSemAcucar(perfil ? prefereSemAcucar(perfil.acucar) : false);
+        if (!vale) {
+          loja.usarVale = false;
+          setUsarVale(false);
+        }
+      });
       setAviso('');
       if (loja.cupom !== '') {
         setCupom(loja.cupom);
@@ -112,7 +133,14 @@ export default function CarrinhoScreen() {
   // Cálculos automáticos de subtotal e total
   const subTotal = itens.reduce((acc, item) => acc + item.precoUnitario * item.qtd, 0);
   const desconto = cupomAplicado !== '' ? Math.max(0, calcularDesconto(cupomAplicado, subTotal)) : 0;
-  const totalPagar = Math.max(0, subTotal - desconto);
+  // O vale cobre até R$15 do que sobrou depois do cupom
+  const descontoVale = usarVale ? Math.min(VALOR_VALE, Math.max(0, subTotal - desconto)) : 0;
+  const totalPagar = Math.max(0, subTotal - desconto - descontoVale);
+
+  function alternarVale() {
+    loja.usarVale = !usarVale;
+    setUsarVale(!usarVale);
+  }
 
   function prosseguir() {
     if (itens.length === 0) {
@@ -121,7 +149,8 @@ export default function CarrinhoScreen() {
     }
     setAviso('');
     loja.subtotal = subTotal;
-    loja.desconto = desconto;
+    loja.desconto = desconto + descontoVale;
+    loja.usarVale = usarVale;
     setPerguntaAberta(true);
   }
 
@@ -190,8 +219,12 @@ export default function CarrinhoScreen() {
 <Text style={styles.productSize}>Tamanho: {nomeTamanho(item.tamanho, item.ml)}</Text>
 </View>
  
-        <Text style={styles.optionalLabel}>Opcional</Text>
+        <Text style={styles.optionalLabel}>{item.opcional !== '---' ? 'Sabor' : 'Opcional'}</Text>
 <Text style={styles.optionalValue}>{item.opcional}</Text>
+
+        {semAcucar && produtoDoItem(item)?.temAcucar ? (
+          <Text style={styles.sugarWarning}>Contém açúcar (você prefere sem açúcar)</Text>
+        ) : null}
  
         <Text style={styles.productPrice}>
           {formatarPreco(item.precoUnitario * item.qtd)}
@@ -292,6 +325,13 @@ export default function CarrinhoScreen() {
 </View>
 
         {mensagemCupom !== '' && <Text style={styles.couponMessage}>{mensagemCupom}</Text>}
+
+        {temVale ? (
+          <TouchableOpacity style={styles.valeRow} onPress={alternarVale} activeOpacity={0.8}>
+            <Ionicons name={usarVale ? 'checkbox' : 'square-outline'} size={22} color={cor('#4A3525')} />
+            <Text style={styles.valeText}>Usar meu vale de até {formatarPreco(VALOR_VALE)} (fidelidade)</Text>
+          </TouchableOpacity>
+        ) : null}
  
         {/* Linhas de Resumo */}
 <View style={styles.summaryRow}>
@@ -303,6 +343,13 @@ export default function CarrinhoScreen() {
 <Text style={styles.summaryLabel}>Desconto</Text>
 <Text style={styles.summaryValue}>-{formatarPreco(desconto)}</Text>
 </View>
+
+        {usarVale ? (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Vale fidelidade</Text>
+            <Text style={styles.summaryValue}>-{formatarPreco(descontoVale)}</Text>
+          </View>
+        ) : null}
  
         <View style={styles.panelDivider} />
  
@@ -440,6 +487,24 @@ const styles = criarEstilos({
     fontSize: 9,
     color: '#6B5849',
     marginBottom: 4,
+  },
+  sugarWarning: {
+    fontSize: 10,
+    color: '#8B2E2E',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  valeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  valeText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#3B291A',
+    fontWeight: '600',
   },
   productPrice: {
     fontSize: 13,

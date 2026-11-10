@@ -22,13 +22,13 @@ const IDIOMAS: { id: Idioma; nome: string }[] = [
 ];
 
 const TEXTOS = {
-  pt: { titulo: 'Configurações', localizacao: 'Ativar localização', notificacoes: 'Ativar notificações', sons: 'Sons' },
-  en: { titulo: 'Settings', localizacao: 'Enable location', notificacoes: 'Enable notifications', sons: 'Sounds' },
-  es: { titulo: 'Configuración', localizacao: 'Activar ubicación', notificacoes: 'Activar notificaciones', sons: 'Sonidos' },
+  pt: { titulo: 'Configurações', localizacao: 'Ativar localização', notificacoes: 'Ativar notificações', modoEscuro: 'Modo escuro' },
+  en: { titulo: 'Settings', localizacao: 'Enable location', notificacoes: 'Enable notifications', modoEscuro: 'Dark mode' },
+  es: { titulo: 'Configuración', localizacao: 'Activar ubicación', notificacoes: 'Activar notificaciones', modoEscuro: 'Modo oscuro' },
 };
 
 export default function ConfiguracoesScreen() {
-  useTema();
+  const { escuro, alternarTema } = useTema();
   const router = useRouter();
 
   function voltar() {
@@ -41,8 +41,6 @@ export default function ConfiguracoesScreen() {
 
   const [localizacaoAtiva, setLocalizacaoAtiva] = useState(true);
   const [notificacoesAtivas, setNotificacoesAtivas] = useState(true);
-  const [volume, setVolume] = useState(70);
-  const [larguraBarra, setLarguraBarra] = useState(0);
 
   const [idioma, setIdioma] = useState<Idioma>('pt');
   const [listaIdiomasAberta, setListaIdiomasAberta] = useState(false);
@@ -57,7 +55,6 @@ export default function ConfiguracoesScreen() {
       }
       setLocalizacaoAtiva(perfil.localizacao_ativa == 1);
       setNotificacoesAtivas(perfil.notificacoes_ativas == 1);
-      setVolume(perfil.volume);
       setIdioma(perfil.idioma);
     });
   }, []);
@@ -67,15 +64,6 @@ export default function ConfiguracoesScreen() {
     enviar('/preferencias', { usuario: idUsuario(), preferencias: preferencias }).catch(() => {});
   }
 
-  function mudarVolume(novoVolume: number) {
-    const valor = Math.round(Math.max(0, Math.min(100, novoVolume)));
-    setVolume(valor);
-    return valor;
-  }
-
-  const diminuirVolume = () => salvar({ volume: mudarVolume(volume - 10) });
-  const aumentarVolume = () => salvar({ volume: mudarVolume(volume + 10) });
-
   function alternarLocalizacao() {
     setLocalizacaoAtiva(!localizacaoAtiva);
     salvar({ localizacao_ativa: !localizacaoAtiva });
@@ -84,13 +72,6 @@ export default function ConfiguracoesScreen() {
   function alternarNotificacoes() {
     setNotificacoesAtivas(!notificacoesAtivas);
     salvar({ notificacoes_ativas: !notificacoesAtivas });
-  }
-
-  // Converte a posição do dedo na barra em porcentagem
-  function tocarNaBarra(posicaoX: number) {
-    if (larguraBarra > 0) {
-      mudarVolume((posicaoX / larguraBarra) * 100);
-    }
   }
 
   function escolherIdioma(novoIdioma: Idioma) {
@@ -206,36 +187,15 @@ export default function ConfiguracoesScreen() {
           </View>
         </View>
 
+        {/* O tema fica salvo no aparelho (lib/tema.tsx), não no banco */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="volume-medium-outline" size={22} color={cor('#3B291A')} />
-            <Text style={styles.cardLabel}>{textos.sons} ({volume}%)</Text>
+            <Ionicons name="moon-outline" size={20} color={cor('#3B291A')} />
+            <Text style={styles.cardLabel}>{textos.modoEscuro}</Text>
           </View>
 
-          <View style={styles.sliderContainer}>
-            <TouchableOpacity onPress={diminuirVolume} style={styles.sliderStepBtn}>
-              <Ionicons name="remove" size={18} color={cor('#3B291A')} />
-            </TouchableOpacity>
-
-            {/* Área de toque maior que a linha, para dar para arrastar com o dedo */}
-            <View
-              style={styles.sliderTouchArea}
-              onLayout={(e) => setLarguraBarra(e.nativeEvent.layout.width)}
-              onStartShouldSetResponder={() => true}
-              onMoveShouldSetResponder={() => true}
-              onResponderGrant={(e) => tocarNaBarra(e.nativeEvent.locationX)}
-              onResponderMove={(e) => tocarNaBarra(e.nativeEvent.locationX)}
-              onResponderRelease={() => salvar({ volume: volume })}
-            >
-              <View style={styles.sliderTrack} pointerEvents="none">
-                <View style={[styles.sliderFill, { width: `${volume}%` }]} />
-                <View style={[styles.sliderThumb, { left: `${volume}%` }]} />
-              </View>
-            </View>
-
-            <TouchableOpacity onPress={aumentarVolume} style={styles.sliderStepBtn}>
-              <Ionicons name="add" size={18} color={cor('#3B291A')} />
-            </TouchableOpacity>
+          <View style={styles.switchRow}>
+            {renderSwitch(escuro, alternarTema)}
           </View>
         </View>
       </ScrollView>
@@ -367,43 +327,6 @@ const styles = criarEstilos({
   },
   switchIconRight: {
     marginRight: 8,
-  },
-
-  sliderContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-  },
-  sliderStepBtn: {
-    padding: 4,
-  },
-  sliderTouchArea: {
-    flex: 1,
-    height: 40,
-    justifyContent: 'center',
-    marginHorizontal: 10,
-  },
-  sliderTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#C7B199',
-    justifyContent: 'center',
-  },
-  sliderFill: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#1A1A1A',
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#1A1A1A',
-    marginLeft: -8,
   },
 
   languageList: {

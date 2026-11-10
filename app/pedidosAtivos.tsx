@@ -14,10 +14,10 @@ import { enviar } from '../lib/api';
 import { estiloLogo, logo, origemImagem } from '../lib/imagens';
 import {
   buscarPedidos,
+  detalheItem,
   formatarPreco,
   idUsuario,
   loja,
-  nomeTamanho,
   Pedido,
   soNumeros,
 } from '../lib/loja';
@@ -133,7 +133,7 @@ export default function PedidosAtivosScreen() {
           <View key={prod.id} style={styles.productRow}>
             <Image source={origemImagem(prod.imagem, prod.nome)} style={styles.productImage} />
             <Text style={styles.productName}>
-              {prod.qtd}x {prod.nome} ({nomeTamanho(prod.tamanho, prod.ml)})
+              {prod.qtd}x {prod.nome} ({detalheItem(prod)})
             </Text>
           </View>
         ))}

@@ -145,6 +145,10 @@ const callback = (req, res)=>{
                 ClienteBD.removerCartao(dados, resposta)
             }else if(rota.pathname == '/lerNotificacoes'){
                 ClienteBD.lerNotificacoes(dados, resposta)
+            }else if(rota.pathname == '/lerNotificacao'){
+                ClienteBD.lerNotificacao(dados, resposta)
+            }else if(rota.pathname == '/resgatarVale'){
+                ClienteBD.resgatarVale(dados, resposta)
             }else if(rota.pathname == '/avaliacao'){
                 ClienteBD.avaliar(dados, resposta)
             }else{

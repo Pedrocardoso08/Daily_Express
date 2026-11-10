@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { enviar } from '../lib/api';
 import { estiloLogo, fotoDoUsuario, logo } from '../lib/imagens';
-import { buscarPerfil, idUsuario, loja, salvarUsuario } from '../lib/loja';
+import { buscarPerfil, idUsuario, loja, prefereSemAcucar, salvarUsuario } from '../lib/loja';
 import { cor, criarEstilos, useTema } from '../lib/tema';
 
 export default function PersonalizacaoScreen() {
@@ -48,7 +48,8 @@ export default function PersonalizacaoScreen() {
       // Sem a linha de preferências no banco, fica tudo no padrão
       if (perfil.tipo_leite !== null) {
         setTipoLeite(perfil.tipo_leite);
-        setAcucar(perfil.acucar);
+        // Contas antigas têm "Sem açucar", escrito sem o acento
+        setAcucar(prefereSemAcucar(perfil.acucar) ? 'Sem açúcar' : perfil.acucar);
         setReceberPromocoes(perfil.receber_promocoes ? 'Sim' : 'Não');
       }
     });
@@ -130,7 +131,7 @@ export default function PersonalizacaoScreen() {
   const opcoesLeiteCol2 = ['Sem lactose', 'Vegetal', 'Vegano'];
 
   const opcoesAcucarCol1 = ['1 colher', '2 colheres', '3 colheres'];
-  const opcoesAcucarCol2 = ['Sem açucar', 'Adoçante', 'Eu coloco'];
+  const opcoesAcucarCol2 = ['Sem açúcar', 'Adoçante', 'Eu coloco'];
 
   const renderRadioItem = (item: string, selecionado: boolean, aoPressionar: () => void) => (
     <TouchableOpacity
@@ -217,7 +218,7 @@ export default function PersonalizacaoScreen() {
         </View>
 
         <View style={[styles.cardBase, styles.optionsCard]}>
-          <Text style={styles.cardHeaderTitle}>Açucar</Text>
+          <Text style={styles.cardHeaderTitle}>Açúcar</Text>
           <View style={styles.columnsContainer}>
             <View style={styles.column}>
               {opcoesAcucarCol1.map((opcao) =>
@@ -230,6 +231,9 @@ export default function PersonalizacaoScreen() {
               )}
             </View>
           </View>
+          {prefereSemAcucar(acucar) ? (
+            <Text style={styles.dicaAcucar}>Vamos avisar quando você escolher um produto com açúcar.</Text>
+          ) : null}
         </View>
 
         <View style={[styles.cardBase, styles.optionsCard]}>
@@ -310,6 +314,11 @@ const styles = criarEstilos({
     fontWeight: 'bold',
     color: '#1A1A1A',
     marginBottom: 12,
+  },
+  dicaAcucar: {
+    fontSize: 12,
+    color: '#6B5849',
+    marginTop: 8,
   },
 
   topCardsRow: {

@@ -24,6 +24,7 @@ import {
   dataDeHoje,
   formatarData,
   formatarPreco,
+  lerSabores,
   loja,
   ProdutoCatalogo,
   soNumeros,
@@ -43,9 +44,8 @@ const ABAS: { id: Aba; titulo: string }[] = [
   { id: 'premios', titulo: 'Prêmios' },
 ];
 
-// Os passos do pedido em andamento. O cliente vê o mesmo texto no histórico.
-// Depois disso o pedido é fechado com o botão Finalizar. Cancelar é só o cliente, no histórico.
-const STATUS_PEDIDO = ['Preparando', 'A caminho'];
+// O status só anda para frente: Preparando -> A caminho (só pedidos de levar) -> Finalizado.
+// Cancelar é só o cliente, na tela Pedidos ativos.
 const FILTROS_PEDIDO = ['Todos', 'Preparando', 'A caminho', 'Finalizado', 'Cancelado'];
 
 // Ícones que dá para escolher no aviso (nomes do Ionicons)
@@ -138,6 +138,9 @@ export default function FuncionariosScreen() {
   const [mlP, setMlP] = useState('');
   const [mlM, setMlM] = useState('');
   const [mlG, setMlG] = useState('');
+  // Sabores separados por vírgula, ex.: "Chocolate, Morango". Vazio = sem escolha de sabor.
+  const [sabores, setSabores] = useState('');
+  const [temAcucar, setTemAcucar] = useState(false);
 
   // Formulário de cupom
   const [codigo, setCodigo] = useState('');
@@ -222,6 +225,8 @@ export default function FuncionariosScreen() {
 
         if (resposta.error) {
           setErro(resposta.error);
+          // A lista pode estar velha (ex.: o cliente cancelou o pedido), então lê de novo
+          setRecarregar(recarregar + 1);
           return;
         }
 
@@ -256,6 +261,8 @@ export default function FuncionariosScreen() {
     setMlP('');
     setMlM('');
     setMlG('');
+    setSabores('');
+    setTemAcucar(false);
   }
 
   // Abre a galeria (no navegador, a janela de escolher arquivo) e manda a imagem para o back-end
@@ -307,6 +314,8 @@ export default function FuncionariosScreen() {
     setMlP(String(item.ml.P));
     setMlM(String(item.ml.M));
     setMlG(String(item.ml.G));
+    setSabores(item.sabores.join(', '));
+    setTemAcucar(item.temAcucar);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
@@ -359,6 +368,12 @@ export default function FuncionariosScreen() {
       }
     }
 
+    const textoSabores = lerSabores(sabores).join(', ');
+    if (textoSabores.length > 255) {
+      setErro('Sabores demais: use no máximo 255 letras.');
+      return;
+    }
+
     mandar(
       '/produto',
       {
@@ -372,6 +387,8 @@ export default function FuncionariosScreen() {
         mlP: ehBebida ? copoP : null,
         mlM: ehBebida ? copoM : null,
         mlG: ehBebida ? copoG : null,
+        sabores: textoSabores === '' ? null : textoSabores,
+        temAcucar: temAcucar,
       },
       limparProduto
     );
@@ -413,6 +430,21 @@ export default function FuncionariosScreen() {
       const partes = validade.trim().split('/');
       if (partes.length !== 3 || partes[0].length !== 2 || partes[1].length !== 2 || partes[2].length !== 4) {
         setErro('Digite a validade assim: 31/12/2026.');
+        return;
+      }
+      // 31/02 não existe: o Date pula para março e o dia não bate
+      const dia = Number(partes[0]);
+      const mes = Number(partes[1]);
+      const ano = Number(partes[2]);
+      const data = new Date(ano, mes - 1, dia);
+      if (data.getFullYear() !== ano || data.getMonth() !== mes - 1 || data.getDate() !== dia) {
+        setErro('Essa data de validade não existe.');
+        return;
+      }
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      if (data < hoje) {
+        setErro('A validade não pode ser antes de hoje.');
         return;
       }
       dataBanco = partes[2] + '-' + partes[1] + '-' + partes[0];
@@ -634,23 +666,19 @@ export default function FuncionariosScreen() {
                   </Text>
                 ) : null}
 
-                {/* Pedido em andamento: passos e botão para finalizar */}
+                {/* Pedido em andamento: só os próximos passos aparecem */}
                 {pedido.status !== 'Finalizado' && pedido.status !== 'Cancelado' ? (
                   <View style={styles.pedidoAcoes}>
-                    <View style={styles.chips}>
-                      {STATUS_PEDIDO.map((status) => (
-                        <TouchableOpacity
-                          key={status}
-                          style={[styles.chip, pedido.status === status && styles.chipAtivo]}
-                          onPress={() => mudarStatus(pedido, status)}
-                          disabled={carregando}
-                        >
-                          <Text style={[styles.chipTexto, pedido.status === status && styles.chipTextoAtivo]}>
-                            {status}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                    <Text style={styles.itemDetalhe}>Agora: {pedido.status}</Text>
+                    {pedido.status === 'Preparando' && pedido.modo === 'Levar' ? (
+                      <TouchableOpacity
+                        style={styles.botaoSecundario}
+                        onPress={() => mudarStatus(pedido, 'A caminho')}
+                        disabled={carregando}
+                      >
+                        <Text style={styles.botaoSecundarioTexto}>Saiu para entrega (A caminho)</Text>
+                      </TouchableOpacity>
+                    ) : null}
                     <TouchableOpacity
                       style={styles.botao}
                       onPress={() => mudarStatus(pedido, 'Finalizado')}
@@ -743,6 +771,22 @@ export default function FuncionariosScreen() {
                   </View>
                 </View>
               ) : null}
+              <Campo
+                rotulo="Sabores (opcional)"
+                value={sabores}
+                onChangeText={setSabores}
+                placeholder="Chocolate, Morango, Limão"
+              />
+              <Text style={styles.legendaCampo}>
+                Separe por vírgula. Com sabores, o cliente escolhe um antes de colocar no carrinho.
+              </Text>
+              <TouchableOpacity style={styles.checkLinha} onPress={() => setTemAcucar(!temAcucar)} activeOpacity={0.8}>
+                <Ionicons name={temAcucar ? 'checkbox' : 'square-outline'} size={22} color={cor('#4A3525')} />
+                <Text style={styles.rotulo}>Contém açúcar</Text>
+              </TouchableOpacity>
+              <Text style={styles.legendaCampo}>
+                Quem escolheu "Sem açúcar" na Personalização recebe um aviso neste produto.
+              </Text>
               <Text style={styles.rotulo}>Imagem (opcional)</Text>
               <View style={styles.imagemLinha}>
                 {imagem !== '' ? (
@@ -805,6 +849,8 @@ export default function FuncionariosScreen() {
                   <Text style={styles.itemDetalhe}>
                     {item.categoria} · R${item.precoNovo}
                     {item.categoria === 'Bebidas' ? ' · ' + item.ml.P + '/' + item.ml.M + '/' + item.ml.G + ' ml' : ''}
+                    {item.sabores.length > 0 ? ' · ' + item.sabores.length + ' sabores' : ''}
+                    {item.temAcucar ? ' · com açúcar' : ''}
                     {item.disponivel === false ? ' · Esgotado' : ''}
                   </Text>
                 </View>
@@ -1185,6 +1231,12 @@ const styles = criarEstilos({
     fontSize: 12,
     color: '#4A3525',
     marginTop: 4,
+  },
+  checkLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
   },
   rotulo: {
     color: '#4A3525',

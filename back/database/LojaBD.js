@@ -17,6 +17,16 @@ const ML_PADRAO = {
     'G':400
 }
 
+// "2026-02-31" não existe: o Date pula para março e o dia não bate
+function dataExiste(texto){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(texto)){
+        return false
+    }
+    var partes = texto.split('-').map(Number)
+    var data = new Date(partes[0], partes[1] - 1, partes[2])
+    return data.getFullYear() == partes[0] && data.getMonth() == partes[1] - 1 && data.getDate() == partes[2]
+}
+
 class LojaBD{
     static connect(){
         const connection = mysql.createConnection({
@@ -31,7 +41,7 @@ class LojaBD{
         return connection
     }
 
-    // Roda quando o servidor liga: cria as colunas de ml num banco feito antes delas existirem.
+    // Roda quando o servidor liga: cria as colunas novas num banco feito antes delas existirem.
     // Se a coluna já existe, o MySQL dá erro e ele é ignorado.
     static prepararBanco(){
         const connection = LojaBD.connect()
@@ -39,7 +49,11 @@ class LojaBD{
             'alter table produtos add column ml_p int',
             'alter table produtos add column ml_m int',
             'alter table produtos add column ml_g int',
-            'alter table pedido_itens add column ml int after tamanho'
+            'alter table produtos add column sabores varchar(255) after ml_g',
+            'alter table produtos add column tem_acucar boolean default false after sabores',
+            'alter table pedido_itens add column ml int after tamanho',
+            'alter table usuarios add column tem_vale boolean default false',
+            'alter table pedidos add column usou_vale boolean default false'
         ]
         colunas.forEach((sql)=>{
             connection.query(sql, ()=>{})
@@ -74,7 +88,7 @@ class LojaBD{
     static getProdutos(todos, callback){
         const connection = LojaBD.connect()
 
-        var sql = 'select p.id, p.nome, p.descricao_curta, p.preco, p.preco_antigo, p.imagem, p.disponivel, p.ml_p, p.ml_m, p.ml_g, c.nome as categoria, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota from produtos p join categorias c on c.id = p.categoria_id where p.ativo = true'
+        var sql = 'select p.id, p.nome, p.descricao_curta, p.preco, p.preco_antigo, p.imagem, p.disponivel, p.ml_p, p.ml_m, p.ml_g, p.sabores, p.tem_acucar, c.nome as categoria, (select avg(a.nota) from avaliacoes a where a.produto_id = p.id) as nota from produtos p join categorias c on c.id = p.categoria_id where p.ativo = true'
 
         if(!todos){
             sql += ' and p.disponivel = true'
@@ -96,8 +110,10 @@ class LojaBD{
     // Cadastro e edição: tela app/funcionarios.tsx
     // Se vier produto.id, o produto que já existe é atualizado.
     // Bebidas vêm com os ml de cada copo (mlP, mlM e mlG); o resto é tamanho único.
+    // sabores = texto separado por vírgula, ex.: "Chocolate, Morango". Vazio = sem escolha de sabor.
+    // temAcucar = true avisa o cliente que prefere "Sem açúcar" na Personalização.
     static addProduto(produto, callback){
-        var {nome, descricao, categoria, preco, precoAntigo, imagem, mlP, mlM, mlG} = produto
+        var {nome, descricao, categoria, preco, precoAntigo, imagem, mlP, mlM, mlG, sabores, temAcucar} = produto
 
         if(!nome || !descricao || !categoria || !preco){
             return callback({'error':'Preencha nome, descrição, categoria e preço.'})
@@ -158,7 +174,9 @@ class LojaBD{
                 imagem: imagem ? imagem : null,
                 ml_p: ehBebida ? mlP : null,
                 ml_m: ehBebida ? mlM : null,
-                ml_g: ehBebida ? mlG : null
+                ml_g: ehBebida ? mlG : null,
+                sabores: sabores ? sabores : null,
+                tem_acucar: temAcucar ? true : false
             }
 
             var sql = 'insert into produtos set ?'
@@ -278,6 +296,12 @@ class LojaBD{
             return callback({'error':'Tipo de cupom inválido.'})
         }
 
+        // Sem isso, o MySQL grava uma data que não existe (ex.: 31/02) como 0000-00-00
+        // e o cupom some para os clientes
+        if(validade && !dataExiste(validade)){
+            return callback({'error':'Essa data de validade não existe.'})
+        }
+
         const connection = LojaBD.connect()
 
         var sqlBusca = 'select id, ativo from cupons where codigo = ?'
@@ -353,7 +377,7 @@ class LojaBD{
 
     // Todos os pedidos de todos os clientes, do mais novo para o mais antigo
     static getPedidosLoja(callback){
-        var sql = 'select pe.id, date_format(pe.criado_em, "%d/%m/%Y") as data, date_format(pe.criado_em, "%H:%i") as hora, pe.status, pe.modo, pe.endereco_entrega, pe.forma_pagamento, pe.total, u.nome as cliente, pi.quantidade, pi.tamanho, pi.ml, pr.nome from pedidos pe join usuarios u on u.id = pe.usuario_id join pedido_itens pi on pi.pedido_id = pe.id join produtos pr on pr.id = pi.produto_id order by pe.id desc, pi.id'
+        var sql = 'select pe.id, date_format(pe.criado_em, "%d/%m/%Y") as data, date_format(pe.criado_em, "%H:%i") as hora, pe.status, pe.modo, pe.endereco_entrega, pe.forma_pagamento, pe.total, u.nome as cliente, pi.quantidade, pi.tamanho, pi.ml, pi.opcional, pr.nome from pedidos pe join usuarios u on u.id = pe.usuario_id join pedido_itens pi on pi.pedido_id = pe.id join produtos pr on pr.id = pi.produto_id order by pe.id desc, pi.id'
 
         LojaBD.rodar(sql, [], (resultado)=>{
             if(resultado.error){
@@ -361,7 +385,7 @@ class LojaBD{
             }
 
             // O banco devolve uma linha por item. Aqui os itens são juntados no seu pedido,
-            // num texto só, ex.: "2x Mocha (300 ml), 1x Croissant"
+            // num texto só, ex.: "2x Mocha (300 ml), 1x Fatia de bolo (Chocolate)"
             var pedidos = []
 
             resultado.forEach((linha)=>{
@@ -388,9 +412,16 @@ class LojaBD{
                 }
                 pedido.itens += linha.quantidade + 'x ' + linha.nome
 
-                // Tamanho único não aparece; os copos aparecem em ml
+                // Tamanho único não aparece; os copos aparecem em ml. O sabor escolhido fica no opcional.
+                var detalhes = []
                 if(linha.tamanho != 'U'){
-                    pedido.itens += ' (' + (linha.ml ? linha.ml : ML_PADRAO[linha.tamanho]) + ' ml)'
+                    detalhes.push((linha.ml ? linha.ml : ML_PADRAO[linha.tamanho]) + ' ml')
+                }
+                if(linha.opcional && linha.opcional != '---'){
+                    detalhes.push(linha.opcional)
+                }
+                if(detalhes.length > 0){
+                    pedido.itens += ' (' + detalhes.join(', ') + ')'
                 }
             })
 
@@ -398,18 +429,57 @@ class LojaBD{
         })
     }
 
-    // status: Preparando, A caminho ou Finalizado (o cliente vê no histórico).
+    // O status só anda para frente: Preparando -> A caminho -> Finalizado.
+    // "A caminho" é só para pedidos de levar. Comer aqui vai direto de Preparando para Finalizado.
     // Cancelar é só com o cliente (ClienteBD.cancelarPedido), e pedido cancelado não muda mais.
     static mudarStatus(pedido, callback){
-        var STATUS_VALIDOS = ['Preparando', 'A caminho', 'Finalizado']
+        // De quais status cada um pode vir
+        var ANTERIORES = {
+            'A caminho': ['Preparando'],
+            'Finalizado': ['Preparando', 'A caminho']
+        }
 
-        if(!pedido.id || !STATUS_VALIDOS.includes(pedido.status)){
+        if(!pedido.id || !ANTERIORES[pedido.status]){
             return callback({'error':'Pedido ou status inválido.'})
         }
 
-        var mensagem = 'Pedido #' + pedido.id + ' agora está: ' + pedido.status
+        var sql = 'update pedidos set status = ? where id = ? and status in (?)'
+        if(pedido.status == 'A caminho'){
+            sql += " and modo = 'Levar'"
+        }
 
-        LojaBD.rodar("update pedidos set status = ? where id = ? and status <> 'Cancelado'", [pedido.status, pedido.id], callback, mensagem)
+        const connection = LojaBD.connect()
+
+        connection.query(sql, [pedido.status, pedido.id, ANTERIORES[pedido.status]], (error, resultado)=>{
+            if(error){
+                connection.end()
+                return callback({'error':'Erro ao acessar o banco de dados. Confira se o MySQL está ligado.'})
+            }
+
+            if(resultado.affectedRows > 0){
+                connection.end()
+                return callback({'message':'Pedido #' + pedido.id + ' agora está: ' + pedido.status})
+            }
+
+            // Nada mudou: explica o porquê
+            connection.query('select status, modo from pedidos where id = ?', pedido.id, (error, results)=>{
+                connection.end()
+
+                if(error || results.length == 0){
+                    return callback({'error':'Pedido não encontrado.'})
+                }
+
+                var atual = results[0]
+
+                if(atual.status == 'Cancelado'){
+                    return callback({'error':'O cliente cancelou o pedido #' + pedido.id + '.'})
+                }
+                if(pedido.status == 'A caminho' && atual.modo != 'Levar'){
+                    return callback({'error':'O pedido #' + pedido.id + ' é para comer aqui, então não sai para entrega.'})
+                }
+                callback({'error':'O pedido #' + pedido.id + ' já está ' + atual.status + ' e não pode voltar.'})
+            })
+        })
     }
 
     // ---------- AVISOS: aba Avisos (aparecem na aba Notificações do cliente) ----------

@@ -12,7 +12,7 @@ export const estiloLogo = {
 };
 
 export const banner = require('../imagens/banner.jpg');
-export const fotoPerfil = require('../imagens/perfil.jpg');
+export const fotoPerfil = require('../imagens/perfil.png');
 export const mapa = require('../imagens/mapa.jpg');
 
 // Foto do usuário logado (vem do back-end). Sem foto, usa a imagem padrão.

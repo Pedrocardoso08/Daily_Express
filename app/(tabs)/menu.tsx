@@ -81,6 +81,7 @@ export default function HomeScreen() {
 
   function favoritar(item: ProdutoCatalogo) {
     alternarFavorito({
+      id: item.id,
       nome: item.nome,
       desc: item.desc,
       nota: item.nota,
@@ -88,16 +89,43 @@ export default function HomeScreen() {
       imagem: item.imagem,
       categoria: item.categoria,
       ml: item.ml,
+      sabores: item.sabores,
+      temAcucar: item.temAcucar,
     });
     setFavoritos(loja.favoritos.map((produto) => produto.nome));
+  }
+
+  function abrirProduto(item: ProdutoCatalogo) {
+    router.push({
+      pathname: '/produto',
+      params: {
+        id: item.id,
+        nome: item.nome,
+        descricao: item.desc,
+        nota: item.nota,
+        preco: item.precoNovo,
+        imagem: item.imagem,
+        categoria: item.categoria,
+        mlP: item.ml.P,
+        mlM: item.ml.M,
+        mlG: item.ml.G,
+        sabores: item.sabores.join(', '),
+        temAcucar: item.temAcucar ? '1' : '0',
+      },
+    });
   }
 
   function alternarCarrinho(item: ProdutoCatalogo) {
     if (estaNoCarrinho(item.nome)) {
       removerDoCarrinho(item.nome);
+    } else if (item.sabores.length > 0) {
+      // Com sabores, o cliente escolhe na tela do produto antes de ir para o carrinho
+      abrirProduto(item);
+      return;
     } else {
       const tamanho = tamanhoInicial(item.categoria);
       adicionarAoCarrinho({
+        produtoId: item.id,
         nome: item.nome,
         desc: item.desc,
         tamanho: tamanho,
@@ -182,22 +210,7 @@ export default function HomeScreen() {
     <TouchableOpacity
       style={styles.productCard}
       activeOpacity={0.85}
-      onPress={() =>
-        router.push({
-          pathname: '/produto',
-          params: {
-            nome: item.nome,
-            descricao: item.desc,
-            nota: item.nota,
-            preco: item.precoNovo,
-            imagem: item.imagem,
-            categoria: item.categoria,
-            mlP: item.ml.P,
-            mlM: item.ml.M,
-            mlG: item.ml.G,
-          },
-        })
-      }
+      onPress={() => abrirProduto(item)}
     >
       <Image source={origemImagem(item.imagem, item.nome)} style={styles.productImage} />
       <View style={styles.productInfo}>

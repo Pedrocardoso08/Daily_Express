@@ -16,13 +16,16 @@ import {
   adicionarAoCarrinho,
   alternarFavorito,
   buscarFavoritos,
+  buscarPerfil,
   ehFavorito,
   formatarPreco,
+  lerSabores,
   ML_PADRAO,
   MlCopos,
   nomeTamanho,
   paraNumero,
   precoPorTamanho,
+  prefereSemAcucar,
   sair,
   Tamanho,
   tamanhoInicial,
@@ -48,6 +51,7 @@ export default function ProdutoDetalhesScreen() {
     }
   }
   const params = useLocalSearchParams<{
+    id?: string;
     nome?: string;
     descricao?: string;
     nota?: string;
@@ -57,6 +61,10 @@ export default function ProdutoDetalhesScreen() {
     mlP?: string;
     mlM?: string;
     mlG?: string;
+    // Separados por vírgula, ex.: "Chocolate, Morango"
+    sabores?: string;
+    // "1" quando o produto tem açúcar
+    temAcucar?: string;
   }>();
 
   // Tudo vem do produto tocado no menu ou nos favoritos (cadastrado pelo funcionário)
@@ -76,16 +84,28 @@ export default function ProdutoDetalhesScreen() {
     M: Number(texto(params.mlM, String(ML_PADRAO.M))),
     G: Number(texto(params.mlG, String(ML_PADRAO.G))),
   };
+  // Produto com sabores (ex.: fatia de bolo): o cliente precisa escolher um antes do carrinho
+  const sabores = lerSabores(texto(params.sabores, ''));
+  const produtoId = texto(params.id, '');
+  const temAcucar = params.temAcucar === '1';
 
   const [menuAberto, setMenuAberto] = useState(false);
   const [favorito, setFavorito] = useState(ehFavorito(nome));
   const [tamanho, setTamanho] = useState<Tamanho>(tamanhoInicial(categoria));
   const [quantidade, setQuantidade] = useState(1);
+  const [sabor, setSabor] = useState('');
+  const [erroSabor, setErroSabor] = useState('');
+  // Cliente que escolheu "Sem açúcar" na Personalização
+  const [semAcucar, setSemAcucar] = useState(false);
 
   // Confere no banco se o produto está nos favoritos
   useEffect(() => {
     buscarFavoritos().then(() => setFavorito(ehFavorito(nome)));
   }, [nome]);
+
+  useEffect(() => {
+    buscarPerfil().then((perfil) => setSemAcucar(perfil ? prefereSemAcucar(perfil.acucar) : false));
+  }, []);
 
   const aumentarQtd = () => setQuantidade((prev) => prev + 1);
   const diminuirQtd = () => setQuantidade((prev) => (prev > 1 ? prev - 1 : 1));
@@ -95,17 +115,39 @@ export default function ProdutoDetalhesScreen() {
   const precoTotal = precoUnitario * quantidade;
 
   function favoritar() {
-    alternarFavorito({ nome, desc: texto(params.descricao, ''), nota, preco, imagem, categoria, ml });
+    alternarFavorito({
+      id: produtoId,
+      nome,
+      desc: texto(params.descricao, ''),
+      nota,
+      preco,
+      imagem,
+      categoria,
+      ml,
+      sabores,
+      temAcucar,
+    });
     setFavorito(!favorito);
   }
 
+  function escolherSabor(item: string) {
+    setSabor(item);
+    setErroSabor('');
+  }
+
   function colocarNoCarrinho() {
+    if (sabores.length > 0 && sabor === '') {
+      setErroSabor('Escolha um sabor.');
+      return;
+    }
+
     adicionarAoCarrinho({
+      produtoId: produtoId !== '' ? produtoId : undefined,
       nome,
       desc: texto(params.descricao, ''),
       tamanho,
       ml: tamanho === 'U' ? null : ml[tamanho],
-      opcional: '---',
+      opcional: sabor !== '' ? sabor : '---',
       precoUnitario,
       qtd: quantidade,
       imagem,
@@ -306,6 +348,15 @@ export default function ProdutoDetalhesScreen() {
             <Text style={styles.descriptionText}>{descricao}</Text>
           </View>
 
+          {semAcucar && temAcucar ? (
+            <View style={styles.sugarWarning}>
+              <Ionicons name="warning-outline" size={20} color={cor('#8B2E2E')} />
+              <Text style={styles.sugarWarningText}>
+                Você escolheu "Sem açúcar" na Personalização, e este produto contém açúcar.
+              </Text>
+            </View>
+          ) : null}
+
           {temTamanho ? (
             <View style={styles.sectionBlock}>
               <Text style={styles.sectionLabel}>Tamanho</Text>
@@ -330,6 +381,25 @@ export default function ProdutoDetalhesScreen() {
               <Text style={styles.descriptionText}>Tamanho único</Text>
             </View>
           )}
+
+          {sabores.length > 0 ? (
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>Sabor</Text>
+              <View style={styles.flavorRow}>
+                {sabores.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.flavorButton, sabor === item && styles.sizeButtonActive]}
+                    onPress={() => escolherSabor(item)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.sizeText, sabor === item && styles.sizeTextActive]}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {erroSabor !== '' ? <Text style={styles.flavorError}>{erroSabor}</Text> : null}
+            </View>
+          ) : null}
 
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>Quantidade</Text>
@@ -463,6 +533,44 @@ const styles = criarEstilos({
   },
   sizeTextActive: {
     color: '#FFFFFF',
+  },
+
+  sugarWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F6EBDD',
+    borderWidth: 1.5,
+    borderColor: '#8B2E2E',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  sugarWarningText: {
+    flex: 1,
+    color: '#8B2E2E',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  flavorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  flavorButton: {
+    backgroundColor: '#4A3525',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flavorError: {
+    color: '#8B2E2E',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
   },
 
   quantityRow: {

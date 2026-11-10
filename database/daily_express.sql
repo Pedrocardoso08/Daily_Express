@@ -29,6 +29,8 @@ CREATE TABLE usuarios(
     foto VARCHAR(255),
     data_nascimento DATE,
     pontos_fidelidade INT DEFAULT 0,
+    -- Vale de até R$15 trocado por 1000 pontos na tela fidelidade (some quando é usado)
+    tem_vale BOOLEAN DEFAULT FALSE,
     ultimo_login DATETIME,
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -61,6 +63,7 @@ CREATE TABLE categorias(
 -- Telas: menu (lista e busca), produto (detalhe)
 -- preco = preço atual do copo pequeno, preco_antigo = preço riscado
 -- ml_p, ml_m, ml_g = ml dos copos pequeno, médio e grande (só bebidas; o funcionário escolhe)
+-- sabores = opções separadas por vírgula, ex.: "Chocolate, Morango" (o cliente escolhe uma; vai para pedido_itens.opcional)
 -- disponivel = FALSE quando o produto está esgotado (some do cardápio por um tempo)
 -- A nota do produto não fica aqui: é a média da tabela avaliacoes.
 -- =====================================================
@@ -76,6 +79,9 @@ CREATE TABLE produtos(
     ml_p INT,
     ml_m INT,
     ml_g INT,
+    sabores VARCHAR(255),
+    -- Avisa quem escolheu "Sem açúcar" na personalizacao
+    tem_acucar BOOLEAN DEFAULT FALSE,
     disponivel BOOLEAN DEFAULT TRUE,
     ativo BOOLEAN DEFAULT TRUE,
     FOREIGN KEY (categoria_id) REFERENCES categorias(id)
@@ -205,6 +211,8 @@ CREATE TABLE pedidos(
     desconto DECIMAL(10,2) DEFAULT 0,
     total DECIMAL(10,2) NOT NULL,
     status VARCHAR(20) DEFAULT 'Preparando',
+    -- TRUE quando o cliente usou o vale da fidelidade (volta para ele se cancelar)
+    usou_vale BOOLEAN DEFAULT FALSE,
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
@@ -285,8 +293,9 @@ CREATE TABLE usuario_notificacoes(
 -- =====================================================
 -- PREFERÊNCIAS
 -- Telas: personalizacao (leite, açúcar, promoções),
--- configuracoes (localização, notificações, idioma, som)
--- idioma: pt, en ou es | volume: 0 a 100
+-- configuracoes (localização, notificações, idioma)
+-- idioma: pt, en ou es
+-- O modo escuro fica salvo no aparelho (lib/tema.tsx), não aqui.
 -- =====================================================
 CREATE TABLE preferencias(
     usuario_id INT PRIMARY KEY,
@@ -295,8 +304,6 @@ CREATE TABLE preferencias(
     receber_promocoes BOOLEAN DEFAULT FALSE,
     notificacoes_ativas BOOLEAN DEFAULT TRUE,
     localizacao_ativa BOOLEAN DEFAULT TRUE,
-    modo_escuro BOOLEAN DEFAULT FALSE,
     idioma VARCHAR(2) DEFAULT 'pt',
-    volume INT DEFAULT 70,
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );

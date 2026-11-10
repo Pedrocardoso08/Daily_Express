@@ -21,12 +21,13 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
 ## Tabelas, campos e onde cada uma age
 
 ### 1. usuarios
-- **Campos:** id, nome, email (único), senha (bcrypt), foto, data_nascimento, pontos_fidelidade, ultimo_login, criado_em.
+- **Campos:** id, nome, email (único), senha (bcrypt), foto, data_nascimento, pontos_fidelidade, tem_vale, ultimo_login, criado_em.
+- **tem_vale:** `TRUE` quando o cliente trocou 1000 pontos por um vale de até R$15 na Fidelidade. Ele usa o vale no carrinho e ele some (volta se o pedido for cancelado). Um vale por vez.
 - **Onde age:**
   - [app/cadastro.tsx](../app/cadastro.tsx) cria o usuário (nome, email e senha).
   - [app/login.tsx](../app/login.tsx) confere o email e a senha, e atualiza `ultimo_login`.
   - [app/(tabs)/perfil.tsx](../app/(tabs)/perfil.tsx) mostra o nome, a foto e o "Logado em".
-  - [app/fidelidade.tsx](../app/fidelidade.tsx) lê os `pontos_fidelidade`.
+  - [app/fidelidade.tsx](../app/fidelidade.tsx) lê os `pontos_fidelidade` e resgata o vale.
 
 ### 2. recuperacao_senha
 - **Campos:** id, usuario_id, codigo, expira_em, usado.
@@ -40,8 +41,10 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
 - **Como é preenchida:** quando o funcionário cadastra o primeiro produto de uma categoria, [back/database/LojaBD.js](../back/database/LojaBD.js) cria a categoria.
 
 ### 4. produtos
-- **Campos:** id, categoria_id, nome, descricao_curta, descricao_completa, preco (copo pequeno), preco_antigo (preço riscado), imagem, ml_p, ml_m, ml_g, disponivel, ativo.
+- **Campos:** id, categoria_id, nome, descricao_curta, descricao_completa, preco (copo pequeno), preco_antigo (preço riscado), imagem, ml_p, ml_m, ml_g, sabores, tem_acucar, disponivel, ativo.
+- **tem_acucar:** marcado pelo funcionário. Quem escolheu "Sem açúcar" na Personalização vê um aviso na tela do produto e no carrinho.
 - **ml_p, ml_m, ml_g:** quantos ml têm os copos pequeno, médio e grande. Só as bebidas têm; o funcionário escolhe no cadastro (precisam crescer do pequeno para o grande). Produto antigo sem esses valores usa 200, 300 e 400 ml.
+- **sabores:** opções separadas por vírgula (ex.: "Chocolate, Morango, Limão"), para produtos como fatia de bolo ou donut. Vazio = produto sem escolha de sabor. Quando tem sabores, o cliente precisa escolher um na tela do produto (o botão de carrinho do menu abre essa tela) e o sabor fica salvo em **pedido_itens.opcional**.
 - **nota:** não é uma coluna. O back-end calcula a média da tabela **avaliacoes** toda vez que lê os produtos. Sem nenhuma avaliação, o app mostra "Novo".
 - **imagem:** um link (http...) ou o caminho da imagem escolhida na galeria pela Área do funcionário (`fotos/produto_...jpg`, salva na pasta `back/fotos`).
 - **disponivel:** `FALSE` quando o produto está esgotado. Ele some do cardápio e dos favoritos, mas continua na lista do funcionário para voltar depois.
@@ -81,7 +84,7 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
 
 ### 10. cupons
 - **Campos:** id, codigo (único), titulo, descricao, tipo (PORCENTAGEM ou VALOR), valor, validade, ativo.
-- **Como é preenchida:** os funcionários cadastram os cupons na Área do funcionário, com a validade opcional (vazia = sem prazo).
+- **Como é preenchida:** os funcionários cadastram os cupons na Área do funcionário, com a validade opcional (vazia = sem prazo). A data precisa existir e não pode ser antes de hoje.
 - **Onde age:**
   - [app/cupons.tsx](../app/cupons.tsx) lista os cupons.
   - [app/(tabs)/carrinho.tsx](../app/(tabs)/carrinho.tsx): o botão "Aplicar" confere se o código existe e calcula o desconto.
@@ -93,8 +96,10 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
   - [app/pagamento.tsx](../app/pagamento.tsx) marca o cupom como `usado` ao finalizar.
 
 ### 12. pedidos
-- **Campos:** id, usuario_id, modo (Comer aqui ou Levar), endereco_entrega (texto), forma_pagamento, cupom (texto), subtotal, desconto, total, status (Preparando, A caminho, Finalizado ou Cancelado), criado_em.
-- **Cancelado:** só o próprio cliente cancela, enquanto o pedido está Preparando ou A caminho. A tela avisa que a loja fica com 30% do valor e só 70% volta para o cliente. É só um aviso: nenhum valor é mexido no banco.
+- **Campos:** id, usuario_id, modo (Comer aqui ou Levar), endereco_entrega (texto), forma_pagamento, cupom (texto), subtotal, desconto (cupom + vale), total, status (Preparando, A caminho, Finalizado ou Cancelado), usou_vale, criado_em.
+- **status:** só anda para frente: Preparando, A caminho (só pedidos de Levar) e Finalizado.
+- **Antes de salvar:** o back-end confere se todos os produtos ainda estão na loja e disponíveis, e só responde depois que os itens foram salvos. Se os itens derem erro, o pedido é apagado.
+- **Cancelado:** só o próprio cliente cancela, enquanto o pedido está Preparando ou A caminho. A tela avisa que a loja fica com 30% do valor e só 70% volta para o cliente (só um aviso). O cancelamento tira os pontos que o pedido deu e devolve o cupom e o vale usados.
 - **Por que o endereço é texto:** o histórico precisa continuar mostrando o endereço mesmo se ele for apagado da tela de Endereços.
 - **Onde age:**
   - [app/(tabs)/carrinho.tsx](../app/(tabs)/carrinho.tsx): a pergunta "Vai comer aqui ou levar?" define o `modo`.
@@ -129,13 +134,13 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
 
 ### 16. usuario_notificacoes
 - **Campos:** id, usuario_id, notificacao_id, lida.
-- **Onde age:** [app/(tabs)/notificacoes.tsx](../app/(tabs)/notificacoes.tsx): o botão "Marcar tudo como lido" muda o campo `lida`.
+- **Onde age:** [app/(tabs)/notificacoes.tsx](../app/(tabs)/notificacoes.tsx) separa as não lidas das lidas. Tocar numa notificação marca só ela; o botão "Marcar tudo como lido" marca todas.
 
 ### 17. preferencias
-- **Campos:** usuario_id, tipo_leite, acucar, receber_promocoes, notificacoes_ativas, localizacao_ativa, modo_escuro, idioma (pt, en ou es), volume (0 a 100).
+- **Campos:** usuario_id, tipo_leite, acucar, receber_promocoes, notificacoes_ativas, localizacao_ativa, idioma (pt, en ou es).
 - **Onde age:**
-  - [app/personalizacao.tsx](../app/personalizacao.tsx) lê e salva o leite, o açúcar e as promoções.
-  - [app/configuracoes.tsx](../app/configuracoes.tsx) lê e salva a localização, as notificações, o idioma e a barra de som.
+  - [app/personalizacao.tsx](../app/personalizacao.tsx) lê e salva o leite, o açúcar e as promoções. Com "Sem açúcar", o app avisa nos produtos com açúcar.
+  - [app/configuracoes.tsx](../app/configuracoes.tsx) lê e salva a localização, as notificações e o idioma. O modo escuro fica salvo no aparelho ([lib/tema.tsx](../lib/tema.tsx)), não no banco.
 
 ## De onde vem cada dado hoje (lib/loja.ts) e para onde vai
 
@@ -145,7 +150,8 @@ Tabelas com `ativo`: produtos, cupons, notificacoes, recompensas, enderecos, car
 - `loja.cartoes` vai para **cartoes**.
 - `loja.pedidos` vai para **pedidos** e **pedido_itens**.
 - `loja.cupom`, `loja.subtotal`, `loja.desconto`, `loja.modo` e `loja.enderecoEntrega` são guardados em **pedidos** quando a compra é finalizada.
-- `loja.idioma` e `loja.volume` vão para **preferencias**.
+- `loja.idioma` vai para **preferencias**.
+- `loja.usarVale` vai para **pedidos.usou_vale** e gasta o **usuarios.tem_vale**.
 - `ACRESCIMO_TAMANHO` vai para **tamanhos**.
 - `CUPONS_VALIDOS` vai para **cupons**.
 

@@ -20,6 +20,7 @@ export type ItemCarrinho = {
   tamanho: Tamanho;
   // ml do copo escolhido. Vazio no tamanho único.
   ml?: number | null;
+  // Sabor escolhido (ex.: "Chocolate"). "---" quando o produto não tem sabores.
   opcional: string;
   precoUnitario: number;
   qtd: number;
@@ -27,6 +28,7 @@ export type ItemCarrinho = {
 };
 
 export type ProdutoFavorito = {
+  id?: string;
   nome: string;
   desc: string;
   nota: string;
@@ -34,6 +36,8 @@ export type ProdutoFavorito = {
   imagem: string;
   categoria?: string;
   ml: MlCopos;
+  sabores: string[];
+  temAcucar: boolean;
 };
 
 export type Endereco = {
@@ -76,6 +80,10 @@ export type ProdutoCatalogo = {
   // false = esgotado (só aparece na tela de funcionários)
   disponivel?: boolean;
   ml: MlCopos;
+  // Sabores que o cliente escolhe (ex.: fatia de bolo). Vazio = sem escolha.
+  sabores: string[];
+  // Marcado pelo funcionário. Avisa quem prefere "Sem açúcar" na Personalização.
+  temAcucar: boolean;
 };
 
 export type CupomLoja = {
@@ -117,6 +125,49 @@ function lerMl(item: any): MlCopos {
     M: item.ml_m ? Number(item.ml_m) : ML_PADRAO.M,
     G: item.ml_g ? Number(item.ml_g) : ML_PADRAO.G,
   };
+}
+
+// Vale da fidelidade: 1000 pontos viram um desconto de até R$15 numa compra
+export const PONTOS_VALE = 1000;
+export const VALOR_VALE = 15;
+
+// A preferência de açúcar vem da Personalização ("Sem açúcar"; contas antigas têm "Sem açucar")
+export function prefereSemAcucar(acucar?: string | null) {
+  if (!acucar) {
+    return false;
+  }
+  return acucar.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === 'sem acucar';
+}
+
+// O produto do cardápio que corresponde ao item do carrinho
+export function produtoDoItem(item: { produtoId?: string; nome: string }) {
+  if (item.produtoId) {
+    return loja.produtos.find((produto) => produto.id === item.produtoId);
+  }
+  return loja.produtos.find((produto) => produto.nome === item.nome);
+}
+
+// "Chocolate, Morango" (como fica no banco) vira ['Chocolate', 'Morango']
+export function lerSabores(texto?: string | null) {
+  if (!texto) {
+    return [];
+  }
+  return texto
+    .split(',')
+    .map((sabor) => sabor.trim())
+    .filter((sabor) => sabor !== '');
+}
+
+// O que aparece entre parênteses no item do pedido: "300 ml", "Único", "Chocolate" ou "300 ml, Chocolate"
+export function detalheItem(item: { tamanho: Tamanho; ml?: number | null; opcional?: string }) {
+  const sabor = item.opcional && item.opcional !== '---' ? item.opcional : '';
+  if (sabor === '') {
+    return nomeTamanho(item.tamanho, item.ml);
+  }
+  if (item.tamanho === 'U') {
+    return sabor;
+  }
+  return nomeTamanho(item.tamanho, item.ml) + ', ' + sabor;
 }
 
 // Quanto cada tamanho soma ao preço cadastrado (o preço do copo pequeno)
@@ -237,10 +288,11 @@ export const loja = {
   enderecos: [] as Endereco[],
   pedidos: [] as Pedido[],
 
-  // Preenchidos durante a compra
+  // Preenchidos durante a compra. O desconto já inclui o vale, quando ele é usado.
   cupom: '',
   subtotal: 0,
   desconto: 0,
+  usarVale: false,
   modo: '',
   enderecoEntrega: '',
 };
@@ -274,13 +326,14 @@ export function sair() {
   loja.cupom = '';
   loja.subtotal = 0;
   loja.desconto = 0;
+  loja.usarVale = false;
 }
 
 // --- FUNÇÕES DO CARRINHO ---
 
 export function adicionarAoCarrinho(novo: Omit<ItemCarrinho, 'id'>) {
   const existente = loja.carrinho.find(
-    (item) => item.nome === novo.nome && item.tamanho === novo.tamanho
+    (item) => item.nome === novo.nome && item.tamanho === novo.tamanho && item.opcional === novo.opcional
   );
   if (existente) {
     existente.qtd += novo.qtd;
@@ -368,6 +421,8 @@ export function buscarProdutos(todos = false) {
         imagem: item.imagem ? item.imagem : '',
         disponivel: item.disponivel !== 0,
         ml: lerMl(item),
+        sabores: lerSabores(item.sabores),
+        temAcucar: item.tem_acucar == 1,
       }));
 
       return [...loja.produtos];
@@ -408,6 +463,7 @@ export function buscarFavoritos() {
       }
 
       loja.favoritos = lista.map((item) => ({
+        id: String(item.id),
         nome: item.nome,
         desc: item.descricao_curta,
         nota: textoNota(item.nota),
@@ -415,6 +471,8 @@ export function buscarFavoritos() {
         imagem: item.imagem ? item.imagem : '',
         categoria: item.categoria,
         ml: lerMl(item),
+        sabores: lerSabores(item.sabores),
+        temAcucar: item.tem_acucar == 1,
       }));
 
       return [...loja.favoritos];
